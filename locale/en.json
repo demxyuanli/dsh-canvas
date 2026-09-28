@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Canvas",
+    "description": "Agent-authored .canvas.tsx files, compiled and rendered live in the Web GUI, with an action bridge back to the agent."
+  }
+}

@@ -1,0 +1,12 @@
+# Canvas plugin row. Inserted into every profile that selects this bundle.
+- insert:
+    - id: dsh-canvas
+      name: '@local/dsh-canvas'
+      config:
+        maxSourceBytes: 1048576
+        maxLines: 8000
+        maxDataBytes: 4194304
+        maxRenderRows: 5000
+        compileTimeoutMs: 2000
+        commandWhitelist: []
+        startTurnCooldownMs: 30000

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "画布",
+    "description": "由 agent 编写的 .canvas.tsx 文件，在 Web GUI 中实时编译与渲染，并可通过动作桥回灌 agent。"
+  }
+}

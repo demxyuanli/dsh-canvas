@@ -1,0 +1,47 @@
+{
+  "name": "@local/dsh-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canvas for the DSH web GUI: agent-authored .canvas.tsx files compiled and rendered live, with a host UI kit, action bridge, and sidecar state",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-resources"
+      ]
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "^0.1.7-rc.2",
+    "sucrase": "^3.35.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4"
+  },
+  "files": [
+    "index.js",
+    "host/",
+    "lib/",
+    "client/",
+    "cordis.patch.yml",
+    "locale/",
+    "icon.svg",
+    "skills/"
+  ]
+}
