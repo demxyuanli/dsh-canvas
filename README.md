@@ -14,6 +14,18 @@
 
 **不是什么**：(a) 不是 `todo_write` 的替代（短任务仍用它）；(b) 不是 `goal` 的替代（goal 管"要不要继续下一轮"）；(c) 不是通用前端框架——画布只能 import `"dsh/canvas"`；(d) 不是第三方内容的沙箱（画布代码 = 插件信任级别，见"已知限制"）。
 
+## 画布意图入口（host hook）
+
+用户说"建个项目的 canvas / 看板 / 画布 / 画板 / 项目文档 / dashboard"时，**不是**在要一篇文档，而是在要"把审计结论与工程现状结构化、可下钻、可回写地呈现"。host 半边在 `agent/pre-step` 上注册了一个意图入口：
+
+- **命中信号**：强名词 `看板 / 画布 / 画板 / 仪表盘 / dashboard / kanban` 直接命中；弱名词 `canvas / board / 项目文档 / 工程现状 / 审计报告 …` 需搭配创建动词（`建 / 做 / 生成 / create / make …`）；
+- **动作**：在进入步骤的消息批次末尾追加一条带来源（`dsh-canvas`）的 user 消息，内容是 **intake 指引**——先说清 intent，再把 7 个对齐问题摆给用户，最后是产出顺序与质量门槛；完整契约见 [skills/canvas/references/intake.md](skills/canvas/references/intake.md)；
+- **边界**：只匹配**人**说的内容（`source.kind === "user"`），不会被别的插件注入的上下文再次触发；每轮只注入一次（后续 step 的消息批次为空）；它自己的异常一律放行，不会破坏 step。
+
+原因：画布的质量几乎完全由"写之前有没有对齐口径"决定。没有入口时，agent 倾向于直接产出一个只有标题与状态的薄看板。
+
+开关与定制：`intentHook: false` 关闭；`intentKeywords` 追加部署自己的触发词；`intentGuide` 替换指引正文。
+
 ## 装法
 
 以普通工作区 bundle 安装：
@@ -46,15 +58,18 @@
 | `maxSourceBytes` | `1048576`（1 MB） | 源码字节硬上限，超出报 `E_TOO_LARGE` |
 | `maxLines` | `8000` | 源码行数硬上限 |
 | `maxDataBytes` | `4194304`（4 MB） | 抽取后 `DATA` 的 JSON 字节硬上限 |
-| `maxRenderRows` | `5000` | 单次渲染行数硬上限；超出截断并报 `W_MANY_ROWS` |
+| `maxRenderRows` | `5000` | 单次渲染行数硬上限；超出截断并显示 `showing N of M`（渲染期文案，不是编译诊断） |
 | `compileTimeoutMs` | `2000` | 单文件编译超时，超出拒绝编译 |
 | `commandWhitelist` | `[]` | `runCommand` 白名单，**默认空 = 全部拒绝**；每项 `{ id, title, command, cwd?, timeoutMs? }` |
 | `startTurnCooldownMs` | `30000` | 同一画布 + 同一 prompt 的冷却窗口（去重） |
+| `intentHook` | `true` | 是否注册画布意图入口（`agent/pre-step`）：命中时把 intake 指引注入当前步骤 |
+| `intentKeywords` | `[]` | 额外的**弱**名词，需搭配创建动词才触发；例如 `["风险登记册"]` |
+| `intentGuide` | — | 用自定义指引替换内建 intake 正文（命中信号行仍会附在末尾） |
 
 补充：
 
-- 软阈值（源码 128 KB / 1500 行 / `DATA` 512 KB / 单组件 300 行）目前是**内建常量**，不在 Config 里，只产生 `W_LARGE_FILE` / `W_MANY_ROWS` 警告，不阻断编译。若要可配置，请先改 `INTERFACE.md` 再实现（配置面属于冻结接口）。
-- 白名单项必须**逐字匹配**画布请求（按 `id` 或完整 `command` 字符串）；`runCommand` 仍受当前 permission preset 约束，被拒时返回 `{ ok: false, code: "denied" }`。
+- 软阈值（源码 128 KB / 1500 行 / `DATA` 512 KB / 单组件 300 行）目前是**内建常量**，不在 Config 里，只产生 `W_LARGE_FILE` 警告；行数截断是渲染期文案，不是诊断。若要可配置，请先改 `INTERFACE.md` 再实现（配置面属于冻结接口）。
+- 白名单项必须**逐字匹配**画布请求（按 `id` 或完整 `command` 字符串）；命令字符串永远取自白名单项，执行经 `ctx.shell` 并按调用 Session 的 `ctx.sandboxPolicy` 约束。白名单为空返回 `{ ok: false, code: "unsupported" }`，未登记返回 `denied`。
 
 ## 架构（两半）
 
@@ -128,6 +143,7 @@ export default function MyBoard() {
 - [skills/canvas/references/kit.md](skills/canvas/references/kit.md) —— 套件完整 API（组件 + 钩子 + 类型）；
 - [skills/canvas/references/patterns.md](skills/canvas/references/patterns.md) —— 看板 / 门禁 / 时间线 / 对比四类范式；
 - [skills/canvas/references/troubleshooting.md](skills/canvas/references/troubleshooting.md) —— 诊断码逐条修法；
+- [skills/canvas/references/intake.md](skills/canvas/references/intake.md) —— 画布意图入口的 intake 契约（审计 / 工程分析 → 高质量画布）；
 - `skills/canvas/templates/*.canvas.tsx` —— `canvas_new` 的三个模板，同时是**必须永远能编译**的回归语料。
 
 ## 验证方式
@@ -142,22 +158,25 @@ export default function MyBoard() {
 6. 明暗主题各看一次；控制台无 `slot entry crashed`。
 7. 人点一次 overlay 按钮 → 关闭页面重开仍在，且 `canvas_read` 能读到该改动。
 
-**当前未验证项（实现期阻塞项）**：动态 `import()` 是否被页面 CSP 允许；`sucrase` 能否经 `install_bundle` 装进 profile 并被 host 半边加载。这两项没有结论之前，画布不会真正渲染。
+**当前未验证项**：真实 GUI 里的目视验收（三张画布的渲染、滚动与排版）；真实 `ctx.shell` 上的 `runCommand`；read-only 会话下的沙箱行为。
+
+> P0 的两个实现期阻塞项（动态 `import()` 的 CSP、`sucrase` 装进 profile）已由运行中的 GUI 闭环：host 半边注入 intent 指引、client 半边渲染画布 tab 都已是实测事实。
 
 ## 已知限制
 
 1. **信任级别 = 插件**：画布代码在宿主页面里执行。不注入 `fetch` / `localStorage` / `document`，也不允许远程资源，但**能**在浏览器里做任意计算（死循环 / 吃内存只能靠渲染上限与页面可恢复性缓解）。不引入 iframe / Worker 隔离。
-2. **不真正虚拟化**：`Table` / `TodoList` 超过单组件 `maxRows`（默认 300）只截断并报 `W_MANY_ROWS`；`BarChart` 超过 40 个 category 只渲染前 40。
-3. **`W_MANY_ROWS` 是渲染期条件**，而诊断管线是编译期（host）——所以 `canvas_check` 看不到它，它只出现在 tab 的 warning 徽标上。
-4. **诊断码口径未完全收敛**：`W_UNKNOWN_PROP` 出现在诊断码联合里但没有对应检查；`E_REACT_IMPORT`（设计文档 §5.3）与 `W_DEPRECATED`（§8.1 / §19）被引用但不在联合里。三者的最终归属待定。
+2. **不真正虚拟化**：`Table` / `TodoList` 超过单组件 `maxRows`（默认 300）只截断并显示 `showing N of M`；`BarChart` 超过 40 个 category 只渲染前 40。
+3. **诊断有两个产出方**：编译期（host 扫描 / 编译器 / 抽取 / `canvas_state_merge`）与渲染期（client 的截断文案）。`canvas_check` 只看得到前者，别用它验证行数上限。
+4. **诊断码口径已收敛**（DESIGN §21）：`E_REACT_IMPORT` 已删除（`import React` 归 `E_PARSE_IMPORT`）；`W_UNKNOWN_PROP` / `W_DEPRECATED` / `W_NO_METADATA` 是 reserved，当前不产出；`W_MANY_ROWS` 是渲染期文案。逐条见 troubleshooting.md。
 5. **旧模块不回收**：浏览器无法卸载已 import 的 ESM，长期会话里旧版本模块会累积（数量 = 修订数），只能提示重载页面。
 6. **只能 import `dsh/canvas`**：画布之间不能互相 import，也不能用第三方库；`BarChart` 只有分组柱状图。
-7. **`runCommand` 默认全拒**：必须先在 Config 里登记白名单项并逐字匹配，且仍受 permission preset 约束。
+7. **`runCommand` 只跑白名单**：命令字符串**永远取自** Config 的 `commandWhitelist` 项（请求只能按 `id` 或完整命令选中，不能改写它），执行经 `ctx.shell` 并按调用 Session 的 `ctx.sandboxPolicy` 约束。白名单为空返回 `unsupported`，未登记返回 `denied`。
 8. **`startTurn` 有限流**：同一画布 + 同一 prompt 在 `startTurnCooldownMs` 内只接受一次，防止误点或循环刷会话。
 9. **发现范围是工作区**：工作区外的 `*.canvas.tsx` 可以用文件地址打开，但不会出现在画布目录里。
 10. **单包双半**：host 半边依赖 `sucrase`，浏览器半边必须零依赖；二者一起发布，不能只装一半。
 11. **sidecar 可能陈旧**：源文件变化后 overlay 不自动丢弃，会以 `staleOverlay` / `orphan` 暴露给 `canvas_read`，由 agent 决定是否 `canvas_state_merge`。
 12. **`.canvas/` 目录名**尚未与既有习惯（`.target-gate/`、`.codegraph/`、`.cursor/`）统一评审。
+13. **意图入口是启发式**：`agent/pre-step` 的匹配规则是强 / 弱名词 + 创建动词，误判与漏判都会发生；用 `intentHook` / `intentKeywords` / `intentGuide` 调，不要指望 100% 准。
 
 ## 相关文档
 

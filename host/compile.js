@@ -9,7 +9,7 @@ import { extractData } from "./literal.js";
 /** Bump when the transform changes; it is part of every module URL. */
 export const COMPILER_VERSION = "c1";
 /** Bump when the kit surface changes; it is part of every module URL. */
-export const KIT_VERSION = "k1";
+export const KIT_VERSION = "k2";
 
 export const DEFAULT_LIMITS = {
   maxSourceBytes: 1048576,

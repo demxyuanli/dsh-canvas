@@ -1,14 +1,21 @@
-/** Every tool definition must survive the real defineTool schema compiler. */
+/** Every tool definition must survive the real defineTool schema compiler, and
+ *  canvas_state_merge must actually move a sidecar into the source. */
 import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import { toolDefinitions } from "../index.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { DEFAULT_LIMITS } from "../host/compile.js";
+import { writeOverlay, readOverlay } from "../host/overlay.js";
 
 const state = { config: { limits: DEFAULT_LIMITS }, rootFor: () => process.cwd() };
 const options = toolDefinitions(state);
-assert.equal(options.length, 3, "expected three tools");
+assert.equal(options.length, 4, "expected four tools");
 
 let pass = 0; let fail = 0;
+const built = new Map();
 for (const option of options) {
   try {
     const tool = defineTool(option);
@@ -18,6 +25,7 @@ for (const option of options) {
     need(option, "description");
     need(option, "parameters");
     assert.equal(typeof option.output.render, "function", option.name + " needs output.render");
+    built.set(option.name, tool);
     pass++;
     console.log("ok   " + option.name + "  params={" + params + "}  output={" + outProps + "}");
   } catch (error) {
@@ -28,5 +36,96 @@ for (const option of options) {
 function need(option, key) {
   assert.ok(option[key] !== undefined, option.name + " is missing " + key);
 }
+
+// --- canvas_state_merge: the sidecar must reach the source, minimally -------
+const CANVAS = [
+  "/** @canvas",
+  " * title: Merge fixture",
+  " */",
+  'import { Stack } from "dsh/canvas";',
+  "",
+  "export const DATA = {",
+  '  goal: "keep me",',
+  "  tasks: [",
+  "    {",
+  '      id: "t1",',
+  '      title: "first",',
+  '      status: "pending",',
+  "    },",
+  '    { id: "t2", title: "second", status: "completed" },',
+  "  ],",
+  "} as const;",
+  "",
+  "export default function Fixture() {",
+  "  return <Stack />;",
+  "}",
+  "",
+].join("\n");
+
+const dir = await fs.mkdtemp(path.join(os.tmpdir(), "canvas-merge-"));
+const canvasPath = path.join(dir, "merge.canvas.tsx");
+await fs.writeFile(canvasPath, CANVAS, "utf8");
+await writeOverlay(canvasPath, { key: "tasks", id: "t1", patch: { status: "in_progress", owner: "worker-a" }, sourceSha1: null });
+
+const mergeTool = built.get("canvas_state_merge");
+if (mergeTool !== undefined) {
+  try {
+    const out = await mergeTool.execute({ path: canvasPath }, {});
+    assert.equal(out.ok, true, out.summary);
+    assert.deepEqual(out.applied, [{ key: "tasks", id: "t1", fields: ["status", "owner"] }]);
+    assert.deepEqual(out.skipped, []);
+    const source = await fs.readFile(canvasPath, "utf8");
+    assert.ok(source.includes('status: "in_progress"'), "patched value missing");
+    assert.ok(source.includes('owner: "worker-a"'), "added field missing");
+    assert.ok(source.includes('{ id: "t2", title: "second", status: "completed" },'), "untouched row moved");
+    assert.ok(source.includes("  return <Stack />;"), "render code moved");
+    const doc = await readOverlay(canvasPath);
+    assert.equal(doc.overlays.tasks, undefined, "the merged entry must leave the sidecar");
+    pass++;
+    console.log("ok   canvas_state_merge lands the sidecar in DATA and clears it");
+  } catch (error) {
+    fail++;
+    console.log("FAIL canvas_state_merge: " + (error && error.message ? error.message : error));
+  }
+
+  // A dry run must report without writing either side.
+  await writeOverlay(canvasPath, { key: "tasks", id: "t2", patch: { status: "pending" }, sourceSha1: null });
+  try {
+    const before = await fs.readFile(canvasPath, "utf8");
+    const out = await mergeTool.execute({ path: canvasPath, dryRun: true }, {});
+    const after = await fs.readFile(canvasPath, "utf8");
+    assert.equal(after, before, "dryRun must not write the source");
+    assert.match(out.summary, /would merge/);
+    assert.ok((await readOverlay(canvasPath)).overlays.tasks !== undefined, "dryRun must not clear the sidecar");
+    pass++;
+    console.log("ok   canvas_state_merge dryRun reports without writing");
+  } catch (error) {
+    fail++;
+    console.log("FAIL canvas_state_merge dryRun: " + (error && error.message ? error.message : error));
+  }
+} else {
+  fail++;
+  console.log("FAIL canvas_state_merge is not registered");
+}
+
+// --- canvas_read: a scalar dataPath must survive the read -------------------
+const readTool = built.get("canvas_read");
+if (readTool !== undefined) {
+  try {
+    const read = await readTool.execute({ path: canvasPath, dataPath: "goal" }, {});
+    const parsed = JSON.parse(read.json);
+    assert.equal(parsed.goal, "keep me", "a scalar dataPath was replaced instead of returned");
+    pass++;
+    console.log("ok   canvas_read returns a scalar dataPath unchanged");
+  } catch (error) {
+    fail++;
+    console.log("FAIL canvas_read scalar dataPath: " + (error && error.message ? error.message : error));
+  }
+} else {
+  fail++;
+  console.log("FAIL canvas_read is not registered");
+}
+
+await fs.rm(dir, { recursive: true, force: true });
 console.log("\n" + pass + " compiled, " + fail + " rejected");
 process.exit(fail === 0 ? 0 : 1);

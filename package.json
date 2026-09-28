@@ -1,9 +1,12 @@
 {
   "name": "@local/dsh-canvas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Canvas for the DSH web GUI: agent-authored .canvas.tsx files compiled and rendered live, with a host UI kit, action bridge, and sidecar state",
   "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
   "icon": "./icon.svg",
   "main": "index.js",
   "exports": {
@@ -28,6 +31,7 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-llm": "^0.1.7-rc.2",
     "@deepseek-ai/dsh-tools": "^0.1.7-rc.2",
     "sucrase": "^3.35.1"
   },
@@ -38,7 +42,6 @@
     "index.js",
     "host/",
     "lib/",
-    "client/",
     "cordis.patch.yml",
     "locale/",
     "icon.svg",

@@ -1,113 +1,158 @@
 /** @canvas
  * title: Task board
- * description: 多状态任务的监控看板：概览 + 筛选 + 待办 + 明细 + 详情 + 动作
+ * description: 任务跟踪看板：加权进度 + 风险派生 + 分组待办 + 富字段详情 + 活动时间线
  * icon: board
  */
 import {
-  H1,
-  H2,
-  Text,
-  Code,
-  Stack,
-  Row,
-  Grid,
-  Divider,
-  Card,
-  CardBody,
-  CardHeader,
-  Callout,
-  Stat,
-  Table,
-  TodoList,
-  Pill,
-  Button,
-  CollapsibleSection,
-  useMemo,
-  useCanvasState,
-  useCanvasOverlay,
-  useCanvasAction,
+  H1, H2, Text, Code, Stack, Row, Grid, Divider, Card, CardBody, CardHeader,
+  Callout, Stat, Table, TodoList, Pill, Button, Progress, KeyValue, Timeline,
+  CollapsibleSection, useMemo, useCanvasState, useCanvasOverlay, useCanvasAction,
 } from "dsh/canvas";
 
-type Status = "pending" | "in_progress" | "completed" | "cancelled";
+type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
+type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 
-// 注：overlay 只能覆盖 DATA 里出现过的字面量（DATA 用了 as const）。
-// 下面四种 status 都至少出现一次，所以任意方向的 overlay.set 都能通过类型检查。
-// 只内联"当前窗口"：未完成 + 最近完成。历史属于另一个文件，不属于这张画布。
+// 每个条目带的是"跟踪所需的字段"，不是只有标题与状态：
+//   status / progress / estimate / actual  -> 到哪一步、还要多少
+//   startedAt / updatedAt / completedAt    -> 停了多久、多久没动过
+//   blocker / next / acceptance            -> 卡在哪、下一步、怎样算完成
+//   evidence / write / ref                 -> 结论的证据、改动位置、参考
+// 这张画布只保留"当前窗口"（在办 + 最近完成）；更早的历史属于另一个文件。
+type Task = {
+  id: string; lane: string; title: string; status: Status; priority: string;
+  owner: string; progress: number; estimate: number; actual: number;
+  startedAt: string; updatedAt: string; completedAt: string; blocker: string;
+  goal: string; next: string; acceptance: string; evidence: string;
+  write: string; ref: string; note: string;
+};
+
 export const DATA = {
-  goal: "把导出管线对齐到参考基线",
-  lanes: ["gate", "kernel", "hygiene"],
+  goal: "把会话令牌迁移到 v2 契约，并保住旧客户端的兼容期",
+  asOf: "2026-09-28",
+  revision: "r12",
+  wipLimit: 2,
+  staleDays: 5,
+  lanes: ["api", "ui", "infra"],
   tasks: [
     {
-      id: "T-01",
-      lane: "gate",
-      title: "把端口自造阈值换成关系式",
-      status: "in_progress",
-      owner: "worker",
-      occt: "BOPAlgo_Tools::...",
-      write: "crates/topo/src/bop/p02.rs",
-      goal: "断言只引用既有基线，不自造阈值",
-      note: "见 t04",
+      id: "T-01", lane: "api", title: "v2 令牌的签发与校验",
+      status: "in_progress", priority: "P0", owner: "worker-a",
+      progress: 60, estimate: 3, actual: 2,
+      startedAt: "2026-09-22", updatedAt: "2026-09-27", completedAt: "", blocker: "",
+      goal: "新旧两种令牌在一个发布周期内都能通过校验",
+      next: "补齐 refresh 分支的过期判定",
+      acceptance: "契约测试覆盖签发 / 校验 / 刷新三条路径",
+      evidence: "test/api/session.test.ts:88", write: "src/api/session.ts",
+      ref: "docs/rfc-12.md#3", note: "接口冻结后 T-02 才能开工",
     },
     {
-      id: "T-02",
-      lane: "kernel",
-      title: "未移植的极值搜索窗口",
-      status: "pending",
-      owner: "-",
-      occt: "Analysis_Surface.cxx:1340-1352",
-      write: "crates/topo/src/pcurve/p01.rs",
-      goal: "把窗口扩张分支移植进去",
-      note: "见 t323",
+      id: "T-02", lane: "ui", title: "登录流程接入新的会话状态机",
+      status: "pending", priority: "P1", owner: "-",
+      progress: 0, estimate: 2, actual: 0,
+      startedAt: "", updatedAt: "2026-09-25", completedAt: "", blocker: "等待 T-01 冻结接口",
+      goal: "登录 / 登出 / 刷新三条路径都有明确的 UI 状态",
+      next: "先按 T-01 的接口草案接状态机，接口冻结后复核",
+      acceptance: "三条路径各有一次手动走查记录",
+      evidence: "-", write: "src/ui/LoginFlow.tsx",
+      ref: "docs/rfc-12.md#5", note: "被阻塞，但可先写不依赖接口的部分",
     },
     {
-      id: "T-03",
-      lane: "gate",
-      title: "parity 掉了一条",
-      status: "pending",
-      owner: "-",
-      occt: "-",
-      write: "crates/topo/src/export.rs",
-      goal: "定位回归来源并恢复",
-      note: "见 t326",
+      id: "T-03", lane: "api", title: "identity 服务的契约对齐",
+      status: "blocked", priority: "P0", owner: "worker-b",
+      progress: 40, estimate: 5, actual: 4,
+      startedAt: "2026-09-15", updatedAt: "2026-09-18", completedAt: "", blocker: "外部 identity 沙箱不可用，等平台组恢复",
+      goal: "我们的校验结果与 identity 服务的返回逐字段一致",
+      next: "先用契约桩推进单测，沙箱恢复后再跑一遍真实路径",
+      acceptance: "契约测试与真实沙箱各跑一遍且都通过",
+      evidence: "test/api/identity.contract.test.ts", write: "src/api/identity.ts",
+      ref: "docs/rfc-12.md#4", note: "已升级到平台组，不要在本地绕沙箱",
     },
     {
-      id: "T-04",
-      lane: "hygiene",
-      title: "删除遗留的调试门",
-      status: "completed",
-      owner: "worker",
-      occt: "-",
-      write: "crates/topo/src/mesh/healer.rs",
-      goal: "移除编译进产物的临时探针",
-      note: "已完成",
+      id: "T-04", lane: "infra", title: "CI 增加令牌单测门禁",
+      status: "completed", priority: "P1", owner: "worker-a",
+      progress: 100, estimate: 1, actual: 1,
+      startedAt: "2026-09-10", updatedAt: "2026-09-12", completedAt: "2026-09-12", blocker: "",
+      goal: "令牌相关单测在 CI 上必跑，红了就挡住合并",
+      next: "-",
+      acceptance: "CI 上有独立的令牌单测 job",
+      evidence: "ci://run/4821", write: ".github/workflows/test.yml",
+      ref: "docs/rfc-12.md#6", note: "已固化进配置",
     },
     {
-      id: "T-05",
-      lane: "kernel",
-      title: "已放弃的旧方案",
-      status: "cancelled",
-      owner: "-",
-      occt: "-",
-      write: "crates/topo/src/legacy.rs",
-      goal: "只记录为何不做",
-      note: "见 t19",
+      id: "T-05", lane: "ui", title: "错误文案集中到一张表",
+      status: "pending", priority: "P2", owner: "-",
+      progress: 0, estimate: 1, actual: 0,
+      startedAt: "", updatedAt: "2026-09-20", completedAt: "", blocker: "",
+      goal: "登录相关文案只有一个来源",
+      next: "把散落的文案抽进 messages.ts",
+      acceptance: "登录流程里没有内联文案",
+      evidence: "-", write: "src/ui/messages.ts",
+      ref: "-", note: "低优先，随时可做",
     },
+    {
+      id: "T-06", lane: "infra", title: "下线 v1 会话表",
+      status: "cancelled", priority: "P2", owner: "-",
+      progress: 0, estimate: 2, actual: 0,
+      startedAt: "", updatedAt: "2026-09-05", completedAt: "", blocker: "",
+      goal: "只记录为什么不做，避免下一轮重新讨论",
+      next: "-",
+      acceptance: "-",
+      evidence: "-", write: "src/legacy/session-v1.ts",
+      ref: "docs/adr-7.md", note: "v1 还要再留一个发布周期",
+    },
+  ],
+  activity: [
+    { id: "a1", at: "2026-09-27", title: "T-01 推进到 60%", tone: "info", detail: "签发路径完成，校验路径待补", ref: "src/api/session.ts:88" },
+    { id: "a2", at: "2026-09-25", title: "T-02 转为待办", tone: "warning", detail: "接口未冻结，先记录阻塞原因", ref: "docs/rfc-12.md#5" },
+    { id: "a3", at: "2026-09-18", title: "T-03 升级到平台组", tone: "danger", detail: "identity 沙箱仍不可用", ref: "docs/rfc-12.md#4" },
+    { id: "a4", at: "2026-09-12", title: "T-04 完成并通过 CI", tone: "success", detail: "令牌单测进入必跑集合", ref: ".github/workflows/test.yml" },
+    { id: "a5", at: "2026-09-05", title: "T-06 关闭", tone: "neutral", detail: "v1 再保留一个发布周期", ref: "docs/adr-07.md" },
   ],
 } as const;
 
-const STATUS_TONE: Record<Status, "neutral" | "warning" | "success" | "danger"> = {
+const STATUS_TONE: Record<string, Tone> = {
   pending: "neutral",
   in_progress: "warning",
+  blocked: "danger",
   completed: "success",
-  cancelled: "danger",
+  cancelled: "neutral",
 };
 
-const STATUS_LABEL: Record<Status, string> = {
-  pending: "todo",
-  in_progress: "active",
-  completed: "done",
-  cancelled: "cancelled",
+const STATUS_LABEL: Record<string, string> = {
+  pending: "待办",
+  in_progress: "进行中",
+  blocked: "阻塞",
+  completed: "完成",
+  cancelled: "取消",
 };
+
+const PRIORITY_TONE: Record<string, Tone> = { P0: "danger", P1: "warning", P2: "neutral" };
+
+const DAY_MS = 86400000;
+
+function statusOf(row: { status?: string }): Status {
+  const s = row.status;
+  return s === "pending" || s === "in_progress" || s === "blocked" || s === "completed" || s === "cancelled" ? s : "pending";
+}
+
+function isOpen(task: Task): boolean {
+  return task.status === "pending" || task.status === "in_progress" || task.status === "blocked";
+}
+
+function progressOf(task: Task): number {
+  return task.status === "completed" ? 100 : task.progress;
+}
+
+function priorityRank(priority: string): number {
+  return priority === "P0" ? 0 : priority === "P1" ? 1 : 2;
+}
+
+function daysBetween(from: string, to: string): number | null {
+  const a = Date.parse(from);
+  const b = Date.parse(to);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((b - a) / DAY_MS);
+}
 
 export default function TaskBoard() {
   const dispatch = useCanvasAction();
@@ -117,85 +162,156 @@ export default function TaskBoard() {
   // 人的状态改动必须走 overlay：它落在 sidecar 里，agent 下一轮 canvas_read 就能看到。
   const overlay = useCanvasOverlay("tasks", DATA.tasks);
 
-  const tasks = overlay.items;
-  const open = useMemo(
-    () => tasks.filter((t) => t.status === "pending" || t.status === "in_progress"),
-    [tasks],
+  const tasks = useMemo(
+    () => overlay.items.map((row) => ({ ...row, status: statusOf(row) })),
+    [overlay.items],
   );
-  const closed = useMemo(
-    () => tasks.filter((t) => t.status === "completed" || t.status === "cancelled"),
-    [tasks],
-  );
-  const visible = useMemo(() => {
-    if (filter === "all") return tasks;
-    if (filter === "open") return open;
-    if (filter === "closed") return closed;
-    return open.filter((t) => t.lane === filter);
-  }, [tasks, open, closed, filter]);
 
-  const active = tasks.find((t) => t.id === activeId) ?? visible[0] ?? tasks[0];
-  const inProgress = tasks.filter((t) => t.status === "in_progress").length;
-  const done = tasks.filter((t) => t.status === "completed").length;
+  // —— 派生分析：所有数字都从 DATA 现算，不手抄结论 ————————————————
+  const open = tasks.filter(isOpen);
+  const closed = tasks.filter((task) => !isOpen(task));
+  const wip = tasks.filter((task) => task.status === "in_progress");
+  const blocked = tasks.filter((task) => task.status === "blocked" || (task.blocker !== "" && isOpen(task)));
+  const done = tasks.filter((task) => task.status === "completed");
+  const counted = tasks.filter((task) => task.status !== "cancelled");
+  const estTotal = counted.reduce((sum, task) => sum + task.estimate, 0);
+  const weighted = counted.reduce((sum, task) => sum + task.estimate * progressOf(task), 0);
+  const progressPct = estTotal === 0 ? 0 : Math.round(weighted / estTotal);
+  const overrun = counted.filter((task) => task.actual > task.estimate);
+  const stale = open.filter((task) => {
+    const age = daysBetween(task.updatedAt, DATA.asOf);
+    return age !== null && age > DATA.staleDays;
+  });
+  const recentDone = done.filter((task) => {
+    const age = task.completedAt === "" ? null : daysBetween(task.completedAt, DATA.asOf);
+    return age !== null && age <= 7;
+  });
 
-  const startTurn = (t: (typeof DATA.tasks)[number]) =>
-    dispatch({
-      type: "startTurn",
-      prompt:
-        "处理 " + t.id + "：" + t.title +
-        "\n目标：" + t.goal +
-        "\n参考：" + t.occt +
-        "\n改动位置：" + t.write +
-        "\n遵守项目既有约束；只改与本任务相关的代码。",
-    });
+  const risks: string[] = [];
+  if (blocked.length > 0) risks.push(blocked.length + " 条阻塞：" + blocked.map((task) => task.id).join("、"));
+  if (wip.length > DATA.wipLimit) risks.push("在办 " + wip.length + " 条，超过 WIP 上限 " + DATA.wipLimit);
+  if (stale.length > 0) risks.push(stale.length + " 条超过 " + DATA.staleDays + " 天未更新：" + stale.map((task) => task.id).join("、"));
+  if (overrun.length > 0) risks.push(overrun.length + " 条实际已超出估算：" + overrun.map((task) => task.id).join("、"));
+
+  const nextUp = open
+    .slice()
+    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || (a.updatedAt < b.updatedAt ? 1 : -1))
+    .slice(0, 3);
+
+  const visible =
+    filter === "all" ? tasks
+      : filter === "closed" ? closed
+        : filter === "blocked" ? blocked
+          : filter === "open" ? open
+            : tasks.filter((task) => task.lane === filter);
+
+  const active = tasks.find((task) => task.id === activeId) ?? nextUp[0] ?? tasks[0];
+  const activeAge = active === undefined ? null : daysBetween(active.updatedAt, DATA.asOf);
+
+  const startTurn = (task: Task) => dispatch({
+    type: "startTurn",
+    prompt:
+      "处理 " + task.id + "：" + task.title +
+      "\n目标：" + task.goal +
+      "\n验收：" + task.acceptance +
+      "\n改动位置：" + task.write +
+      "\n证据：" + task.evidence +
+      "\n参考：" + task.ref +
+      "\n当前：" + STATUS_LABEL[task.status] + "，进度 " + progressOf(task) + "%，估算 " + task.estimate + " 人日 / 已用 " + task.actual + " 人日" +
+      "\n阻塞：" + (task.blocker === "" ? "无" : task.blocker) +
+      "\n下一步：" + task.next +
+      "\n只改与本任务相关的代码；完成后更新这张画布的 DATA（进度、更新日期、证据）。",
+  });
 
   return (
     <Stack gap={24}>
-      <Stack gap={8}>
+      <Stack gap={10}>
         <H1>Task board</H1>
         <Text tone="secondary">{DATA.goal}</Text>
+        <Text size="caption" tone="tertiary">
+          快照 {DATA.asOf} · 修订 {DATA.revision} · 快照前 7 天完成 {recentDone.length} 条 · WIP 上限 {DATA.wipLimit}
+        </Text>
+        <Progress
+          value={progressPct}
+          showValue
+          label={"加权进度（按估算人日，计入 " + counted.length + " 条）"}
+          tone={progressPct >= 70 ? "success" : progressPct >= 35 ? "info" : "warning"}
+        />
       </Stack>
 
-      <Grid columns={4} gap={16}>
-        <Stat value={tasks.length} label="tracked" />
-        <Stat value={open.length} label="open" tone="warning" />
-        <Stat value={inProgress} label="in progress" tone="info" />
-        <Stat value={done} label="done" tone="success" />
+      <Grid columns={4} gap={12}>
+        <Stat value={tasks.length} label="跟踪中" hint={"在办 " + open.length + " · 关闭 " + closed.length} />
+        <Stat value={wip.length + "/" + DATA.wipLimit} label="在办 / WIP 上限" tone={wip.length > DATA.wipLimit ? "danger" : "info"} />
+        <Stat
+          value={blocked.length}
+          label="阻塞"
+          tone={blocked.length > 0 ? "danger" : "neutral"}
+          hint={blocked.length > 0 ? blocked.map((task) => task.id).join("、") : "无"}
+        />
+        <Stat value={progressPct + "%"} label="加权进度" tone={progressPct >= 70 ? "success" : "warning"} hint={Math.round(weighted / 100) + " / " + estTotal + " 人日"} />
       </Grid>
 
-      <Callout tone="info" title="人与 agent 共用一份真相">
-        面板上的状态改动落进 sidecar，agent 下一轮就能读到；筛选器只是本机 UI，不影响数据。
-        明细里的数字来自真实产物，不要手抄。
-      </Callout>
+      {risks.length === 0 ? (
+        <Callout tone="success" title="没有需要立即处理的风险">
+          <Text size="small">无阻塞、无超期未更新、WIP 未超限、无超估算。</Text>
+        </Callout>
+      ) : (
+        <Callout tone={blocked.length > 0 ? "danger" : "warning"} title={risks.length + " 项需要处理"}>
+          <Stack gap={4}>
+            {risks.map((risk) => <Text key={risk} size="small">{risk}</Text>)}
+          </Stack>
+        </Callout>
+      )}
 
       <Row gap={8} wrap>
-        <Pill active={filter === "open"} onClick={() => setFilter("open")}>
-          Open {open.length}
-        </Pill>
-        <Pill active={filter === "all"} onClick={() => setFilter("all")}>
-          All {tasks.length}
-        </Pill>
-        <Pill active={filter === "closed"} onClick={() => setFilter("closed")}>
-          Closed {closed.length}
-        </Pill>
-        <Divider />
+        <Pill active={filter === "open"} onClick={() => setFilter("open")}>在办 {open.length}</Pill>
+        <Pill active={filter === "blocked"} onClick={() => setFilter("blocked")}>阻塞 {blocked.length}</Pill>
+        <Pill active={filter === "closed"} onClick={() => setFilter("closed")}>已关闭 {closed.length}</Pill>
+        <Pill active={filter === "all"} onClick={() => setFilter("all")}>全部 {tasks.length}</Pill>
+        <Divider orientation="vertical" />
         {DATA.lanes.map((lane) => (
-          <Pill key={lane} active={filter === lane} onClick={() => setFilter(lane)}>
-            {lane}
-          </Pill>
+          <Pill key={lane} active={filter === lane} onClick={() => setFilter(lane)}>{lane}</Pill>
         ))}
       </Row>
 
-      <Grid columns="minmax(0, 1.1fr) minmax(0, 0.9fr)" gap={20} align="start">
+      <Grid columns="minmax(0, 1.05fr) minmax(0, 0.95fr)" gap={20} align="start">
         <Stack gap={12}>
-          <H2>Todo</H2>
-          <TodoList
-            todos={visible.map((t) => ({ id: t.id, status: t.status, content: t.title }))}
-            onTodoClick={(todo) => setActiveId(todo.id)}
-          />
-          <CollapsibleSection title="Closed" count={closed.length}>
+          <H2>待办</H2>
+          {DATA.lanes.map((lane) => {
+            const laneRows = visible.filter((task) => task.lane === lane);
+            if (laneRows.length === 0) return null;
+            const laneOpen = laneRows.filter(isOpen);
+            const laneCounted = laneRows.filter((task) => task.status !== "cancelled");
+            const laneEst = laneCounted.reduce((sum, task) => sum + task.estimate, 0);
+            const laneWeighted = laneCounted.reduce((sum, task) => sum + task.estimate * progressOf(task), 0);
+            const lanePct = laneEst === 0 ? 0 : Math.round(laneWeighted / laneEst);
+            const laneBlocked = laneRows.some((task) => task.status === "blocked");
+            return (
+              <CollapsibleSection
+                key={lane}
+                title={lane}
+                count={laneRows.length}
+                defaultOpen
+                trailing={<Text size="caption" tone="tertiary">{laneOpen.length} 在办 · {lanePct}%</Text>}
+              >
+                <Stack gap={8}>
+                  <Progress value={lanePct} size="sm" tone={laneBlocked ? "danger" : "info"} />
+                  <TodoList
+                    todos={laneRows.map((task) => ({ id: task.id, status: task.status, content: task.priority + " · " + task.title }))}
+                    onTodoClick={(todo) => setActiveId(todo.id)}
+                  />
+                </Stack>
+              </CollapsibleSection>
+            );
+          })}
+          <CollapsibleSection
+            title="已关闭"
+            count={closed.length}
+            trailing={<Text size="caption" tone="tertiary">历史不进默认视图</Text>}
+          >
             <TodoList
               dense
-              todos={closed.map((t) => ({ id: t.id, status: t.status, content: t.title }))}
+              todos={closed.map((task) => ({ id: task.id, status: task.status, content: task.title }))}
               onTodoClick={(todo) => setActiveId(todo.id)}
             />
           </CollapsibleSection>
@@ -204,74 +320,136 @@ export default function TaskBoard() {
         {active ? (
           <Card>
             <CardHeader trailing={<Pill size="sm" tone={STATUS_TONE[active.status]}>{STATUS_LABEL[active.status]}</Pill>}>
-              {active.id}
+              {active.id + " · " + active.priority}
             </CardHeader>
             <CardBody>
               <Stack gap={12}>
                 <Text weight="semibold">{active.title}</Text>
-                <Text>{active.goal}</Text>
-                <Text size="small">
-                  分组：<Code>{active.lane}</Code> · 负责人：<Code>{active.owner}</Code>
-                </Text>
-                <Text size="small">
-                  参考：<Code>{active.occt}</Code>
-                </Text>
-                <Text size="small">
-                  改动：<Code>{active.write}</Code>
-                </Text>
-                <Text size="small" tone="tertiary">
-                  {active.note}
-                </Text>
+                <Progress
+                  value={progressOf(active)}
+                  size="sm"
+                  showValue
+                  label={"进度 · 已用 " + active.actual + " / 估算 " + active.estimate + " 人日"}
+                  tone={STATUS_TONE[active.status] === "neutral" ? "info" : STATUS_TONE[active.status]}
+                />
+                <KeyValue
+                  dense
+                  items={[
+                    { label: "负责人", value: active.owner === "-" ? "未认领" : active.owner },
+                    { label: "分组", value: active.lane },
+                    { label: "开始", value: active.startedAt === "" ? "—" : active.startedAt },
+                    { label: "最近更新", value: active.updatedAt + (activeAge === null ? "" : "（" + activeAge + " 天前）") },
+                    { label: "目标", value: active.goal },
+                    { label: "验收", value: active.acceptance },
+                    { label: "下一步", value: active.next, tone: "info" },
+                    { label: "阻塞", value: active.blocker === "" ? "无" : active.blocker, tone: active.blocker === "" ? "neutral" : "danger" },
+                    { label: "证据", value: <Code>{active.evidence}</Code> },
+                    { label: "改动", value: <Code>{active.write}</Code> },
+                    { label: "参考", value: <Code>{active.ref}</Code> },
+                    { label: "备注", value: active.note },
+                  ]}
+                />
                 <Divider />
                 <Row gap={8} wrap>
-                  <Button variant="primary" onClick={() => startTurn(active)}>
-                    Start in chat
-                  </Button>
-                  <Button onClick={() => overlay.set(active.id, { status: "in_progress" })}>
-                    Mark active
-                  </Button>
-                  <Button onClick={() => overlay.set(active.id, { status: "completed" })}>
-                    Mark done
-                  </Button>
-                  <Button variant="ghost" onClick={() => overlay.clear(active.id)}>
-                    Reset to source
-                  </Button>
-                  <Button variant="ghost" onClick={() => dispatch({ type: "openFile", path: active.write })}>
-                    Open file
-                  </Button>
+                  <Button variant="primary" onClick={() => startTurn(active)}>在会话里开始</Button>
+                  <Button disabled={active.status === "in_progress"} onClick={() => overlay.set(active.id, { status: "in_progress" })}>标记进行中</Button>
+                  <Button disabled={active.status === "completed"} onClick={() => overlay.set(active.id, { status: "completed" })}>标记完成</Button>
+                  <Button disabled={active.status === "blocked"} onClick={() => overlay.set(active.id, { status: "blocked" })}>标记阻塞</Button>
+                  <Button variant="ghost" onClick={() => overlay.clear(active.id)}>恢复源数据</Button>
+                  <Button variant="ghost" onClick={() => dispatch({ type: "openFile", path: active.write })}>打开文件</Button>
                 </Row>
+                <Text size="caption" tone="tertiary">
+                  人的状态改动落进 sidecar，agent 下一轮用 canvas_read 就能看到。
+                </Text>
               </Stack>
             </CardBody>
           </Card>
         ) : null}
       </Grid>
 
-      <H2>Detail</H2>
+      <H2>下一步</H2>
+      <Grid columns={3} gap={12}>
+        {nextUp.map((task) => (
+          <Card key={task.id}>
+            <CardHeader trailing={<Pill size="sm" tone={PRIORITY_TONE[task.priority]}>{task.priority}</Pill>}>
+              {task.id}
+            </CardHeader>
+            <CardBody>
+              <Stack gap={8}>
+                <Text size="small" weight="semibold">{task.title}</Text>
+                <Text size="caption" tone="secondary">{task.next}</Text>
+                <Row gap={6} wrap>
+                  <Button size="sm" variant="primary" onClick={() => startTurn(task)}>开始</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setActiveId(task.id)}>看详情</Button>
+                  {task.blocker === "" ? null : <Pill size="sm" tone="danger">阻塞</Pill>}
+                </Row>
+              </Stack>
+            </CardBody>
+          </Card>
+        ))}
+      </Grid>
+
+      <H2>明细</H2>
       <Table
-        headers={["ID", "分组", "标题", "状态", "负责人", "改动文件"]}
-        columnAlign={["left", "left", "left", "left", "left", "left"]}
+        headers={["ID", "优先", "分组", "标题", "状态", "负责人", "进度", "更新"]}
+        columnAlign={["left", "left", "left", "left", "left", "left", "right", "right"]}
         striped
         stickyHeader
-        emptyText="没有条目"
+        emptyText="没有符合当前筛选的条目"
         onRowClick={(index) => {
           const row = visible[index];
-          if (row) setActiveId(row.id);
+          if (row !== undefined) setActiveId(row.id);
         }}
-        rows={visible.map((t) => [
-          <Code>{t.id}</Code>,
-          t.lane,
-          t.title,
-          <Pill size="sm" tone={STATUS_TONE[t.status]}>
-            {STATUS_LABEL[t.status]}
-          </Pill>,
-          t.owner,
-          <Code>{t.write}</Code>,
+        rows={visible.map((task) => [
+          <Code>{task.id}</Code>,
+          <Pill size="sm" tone={PRIORITY_TONE[task.priority]}>{task.priority}</Pill>,
+          task.lane,
+          task.title,
+          <Pill size="sm" tone={STATUS_TONE[task.status]}>{STATUS_LABEL[task.status]}</Pill>,
+          task.owner === "-" ? "未认领" : task.owner,
+          <Progress value={progressOf(task)} size="sm" showValue tone={STATUS_TONE[task.status] === "neutral" ? "info" : STATUS_TONE[task.status]} />,
+          task.updatedAt,
         ])}
-        rowTone={visible.map((t) => STATUS_TONE[t.status])}
+        rowTone={visible.map((task) => task.status === "blocked" ? "danger" : task.status === "completed" ? "success" : "neutral")}
       />
 
-      <Text size="small" tone="tertiary">
-        这张画布只保留当前窗口。要归档，把已完成条目移到另一个画布或外置文件。
+      <CollapsibleSection
+        title="活动"
+        count={DATA.activity.length}
+        defaultOpen
+        trailing={<Text size="caption" tone="tertiary">只留最近 {DATA.activity.length} 条；更早的看提交历史</Text>}
+      >
+        <Timeline
+          events={DATA.activity.map((event) => ({
+            id: event.id,
+            at: event.at,
+            title: event.title,
+            tone: event.tone,
+            detail: event.detail,
+            ref: event.ref,
+          }))}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="怎么维护这张画布">
+        <Stack gap={6}>
+          <Text size="small">
+            <Code>DATA</Code> 是 agent 写的数据快照：统计、进度、风险都从它现算，不要手抄结论。
+          </Text>
+          <Text size="small">
+            人的状态改动走画布上的按钮，落进 sidecar（<Code>canvas_read</Code> 可见）；确认后由 agent 固化回 <Code>DATA</Code>。
+          </Text>
+          <Text size="small">
+            筛选器与当前选中项只存在本机（<Code>useCanvasState</Code>），刷新后保留，agent 看不到。
+          </Text>
+          <Text size="small" tone="tertiary">
+            这条画布只放当前窗口；已完成超过一个窗口的条目应移出，而不是把历史粘进来。
+          </Text>
+        </Stack>
+      </CollapsibleSection>
+
+      <Text size="caption" tone="tertiary">
+        快照 {DATA.asOf} · 修订 {DATA.revision} · 由 agent 更新，人只改状态。
       </Text>
     </Stack>
   );

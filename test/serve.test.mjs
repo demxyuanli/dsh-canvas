@@ -9,6 +9,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { createUserMessage } from "@deepseek-ai/dsh-llm";
+
 import { apply, name } from "../index.js";
 
 let pass = 0; let fail = 0;
@@ -51,8 +53,14 @@ await fs.mkdir(path.dirname(canvasPath), { recursive: true });
 await fs.writeFile(canvasPath, CANVAS, "utf8");
 
 // --- a ctx shim that behaves like the parts of the host the plugin uses ------
+// SessionController.prompt(request, signal): `mode` is a required field and the
+// signal is dereferenced before admission, so both must be observable here.
+const sessionPromptCalls = [];
 const services = {
   webServer: { register(route) { services._route = route; return function () {}; } },
+  sessionController: {
+    prompt(request, signal) { sessionPromptCalls.push({ request, signal }); return Promise.resolve({ accepted: true }); },
+  },
 };
 function makeCtx(scope) {
   // Cordis exposes injected services as properties on the scoped context AND
@@ -61,6 +69,9 @@ function makeCtx(scope) {
     get(k) { return scope[k]; },
     inject(names, cb) { if (names.every((n) => scope[n] !== undefined)) cb(makeCtx(scope)); },
     effect(fn) { return fn(); },
+    // The host registers the canvas-intent hook on the agent step waterfall;
+    // record it so a composition that silently loses the entry fails the test.
+    on(name, listener) { (scope._listeners = scope._listeners || []).push({ name, listener }); return function () {}; },
   };
   return Object.assign(scoped, scope);
 }
@@ -71,6 +82,7 @@ assert.equal(name, "canvas");
 const route = services._route;
 assert.equal(route.kind, "prefix");
 assert.equal(route.path, "/canvas");
+assert.ok((services._listeners || []).some((entry) => entry.name === "agent/pre-step"), "the canvas intent hook must register on agent/pre-step");
 
 const server = http.createServer(route.handler);
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -209,6 +221,30 @@ await t("startTurn without a session is a clean refusal, not a crash", async () 
   assert.equal(r.body.code, "unsupported");
 });
 
+await t("startTurn passes the required mode and an AbortSignal to prompt", async () => {
+  sessionPromptCalls.length = 0;
+  const r = await postJson("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "s1", action: { type: "startTurn", prompt: "处理 T-1：第一个" } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true, JSON.stringify(r.body));
+  assert.equal(sessionPromptCalls.length, 1, "prompt must be called exactly once");
+  const call = sessionPromptCalls[0];
+  assert.equal(call.request.mode, "queue", "mode is a required field of SessionPromptRequest");
+  assert.equal(call.request.sessionId, "s1");
+  assert.equal(typeof call.request.requestId, "string");
+  assert.equal(call.request.content[0].type, "text");
+  assert.equal(call.request.content[0].text, "处理 T-1：第一个");
+  assert.ok(call.signal, "an AbortSignal must be passed: prompt() dereferences it immediately");
+  assert.equal(typeof call.signal.throwIfAborted, "function");
+});
+
+await t("a repeated startTurn inside the cooldown is denied before any prompt", async () => {
+  sessionPromptCalls.length = 0;
+  const r = await postJson("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "s1", action: { type: "startTurn", prompt: "处理 T-1：第一个" } });
+  assert.equal(r.body.ok, false);
+  assert.equal(r.body.code, "denied");
+  assert.equal(sessionPromptCalls.length, 0, "a throttled click must not reach the agent");
+});
+
 await t("runCommand refuses while the whitelist is empty", async () => {
   const r = await postJson("/canvas/action", { action: { type: "runCommand", command: "rm -rf /" } });
   assert.equal(r.body.ok, false);
@@ -221,6 +257,102 @@ await t("an unknown route under the prefix is a clean 404", async () => {
   assert.equal(r.body.ok, false);
 });
 
+await t("a legacy flat action body still works (stale page, reloaded host)", async () => {
+  sessionPromptCalls.length = 0;
+  const r = await postJson("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "s1", type: "startTurn", prompt: "处理 T-2：扁平形状" });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true, JSON.stringify(r.body));
+  assert.equal(sessionPromptCalls.length, 1);
+  assert.equal(sessionPromptCalls[0].request.mode, "queue");
+});
+
+await t("an action body with no type names the envelope in its message", async () => {
+  const r = await postJson("/canvas/action", { canvas: "specs/demo.canvas.tsx" });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, false);
+  assert.equal(r.body.code, "unsupported");
+  assert.match(r.body.message, /action/);
+  assert.match(r.body.message, /canvas/);
+});
+
+// --- runCommand through the real ctx.shell seam ------------------------------
+// The main server keeps an empty whitelist (refusal path above); this second
+// composition configures one entry and a fake executor, so the assertions are
+// about what canvas code may and may not reach.
+const shellCalls = [];
+const services2 = {
+  webServer: { register(route) { services2._route = route; return function () {}; } },
+  shell: {
+    resolve(request) {
+      shellCalls.push(request);
+      return { command: request.command, workdir: request.workdir, timeoutMs: request.timeoutMs, onExpiry: "kill", stdoutMaxBytes: 65536, sandboxPolicy: request.sandboxPolicy };
+    },
+    async execute(spec) {
+      services2._spec = spec;
+      return {
+        result: async () => ({ exitCode: 0, signal: null, timedOut: false, timeoutMs: spec.timeoutMs, stdout: { text: "gate-ok\n", truncated: false }, stderr: { text: "", truncated: false } }),
+      };
+    },
+  },
+  sandboxPolicy: { resolve: () => ({ mode: "workspace-write", workspaceRoot: root }) },
+};
+apply(makeCtx(services2), { workspaceRoot: root, commandWhitelist: [{ id: "gate:demo", title: "demo gate", command: "echo gate-ok", timeoutMs: 5000 }] });
+const server2 = http.createServer(services2._route.handler);
+await new Promise((resolve) => server2.listen(0, "127.0.0.1", resolve));
+const origin2 = "http://127.0.0.1:" + server2.address().port;
+async function post2(url, value) {
+  const res = await fetch(origin2 + url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
+  return { status: res.status, body: await res.json() };
+}
+
+await t("runCommand runs a whitelisted entry through ctx.shell", async () => {
+  const r = await post2("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "s1", action: { type: "runCommand", id: "gate:demo" } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true, JSON.stringify(r.body));
+  assert.equal(r.body.exitCode, 0);
+  assert.match(r.body.stdout, /gate-ok/);
+  assert.equal(shellCalls.length, 1, "expected exactly one shell request");
+  assert.equal(shellCalls[0].command, "echo gate-ok", "the command must come from the whitelist");
+  assert.equal(shellCalls[0].sandboxPolicy.mode, "workspace-write", "the session sandbox policy must reach the executor");
+});
+
+await t("runCommand refuses an id that no whitelist entry has", async () => {
+  const r = await post2("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "s1", action: { type: "runCommand", id: "gate:nope" } });
+  assert.equal(r.body.ok, false);
+  assert.equal(r.body.code, "denied");
+});
+
+await t("a request-supplied command string cannot displace the whitelist", async () => {
+  shellCalls.length = 0;
+  const r = await post2("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "s1", action: { type: "runCommand", id: "gate:demo", command: "rm -rf /" } });
+  assert.equal(r.body.ok, true);
+  assert.equal(shellCalls[0].command, "echo gate-ok");
+});
+
+// --- the canvas intent entry is live in this composition --------------------
+async function dispatchIntent(text) {
+  const entry = (services._listeners || []).find((item) => item.name === "agent/pre-step");
+  assert.ok(entry, "the canvas intent hook is not registered");
+  const batch = [createUserMessage({ content: [{ type: "text", text: text }], source: { kind: "user" } })];
+  return entry.listener({ messages: batch }, async () => ({ kind: "enter", messages: batch }));
+}
+
+await t("the intent hook injects the intake guidance on a canvas request", async () => {
+  const out = await dispatchIntent("给我建个项目看板");
+  assert.equal(out.kind, "enter");
+  assert.equal(out.messages.length, 2, "expected the user message plus one guidance message");
+  const added = out.messages[1];
+  assert.equal(added.role, "user");
+  assert.equal(added.source.kind, "dsh-canvas");
+  assert.ok(added.content[0].text.includes("意图入口"), "guidance text missing");
+});
+
+await t("the intent hook stays quiet on an unrelated prompt", async () => {
+  const out = await dispatchIntent("帮我修一个空指针，别动别的文件");
+  assert.equal(out.messages.length, 1);
+});
+
+await new Promise((resolve) => server2.close(resolve));
 await new Promise((resolve) => server.close(resolve));
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail === 0 ? 0 : 1);

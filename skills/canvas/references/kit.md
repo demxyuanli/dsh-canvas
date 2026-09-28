@@ -7,7 +7,7 @@ import {
   Stack, Row, Grid, Divider, CollapsibleSection,
   H1, H2, Text, Code,
   Card, CardHeader, CardBody, Callout,
-  Stat, Table, BarChart, TodoList,
+  Stat, Table, BarChart, TodoList, Progress, KeyValue, Timeline,
   Button, Pill,
   useState, useEffect, useMemo, useCallback, useRef,
   useCanvasState, useCanvasOverlay, useCanvasAction, useHostTheme, useCanvasResource,
@@ -16,18 +16,19 @@ import {
 
 不要 `import React from "react"`，也不要任何其它模块——它们会被 `E_PARSE_IMPORT` 拒绝。
 
-## 设计约定（先读这四条）
+## 设计约定（先读这五条）
 
 1. **只认语义 `tone`，不认颜色**：不要写颜色值、不要写 class、不要写像素间距。颜色与间距由宿主解析，主题切换自动跟随。
 2. **受控组件**：`active` / `open` 由调用方给。唯一例外是 `CollapsibleSection` 的 `defaultOpen`。
-3. **`tone` 与 `size` 是两条独立的轴**：`tone` 管颜色，`size` 管字号。
-4. **只加不减**：套件不会删导出或改签名。若某天必须改，会先给 `W_DEPRECATED` 诊断并保留至少两个 minor 版本。
+3. **`tone` 与 `size` 是两条独立的轴**：`tone` 管颜色，`size` 管字号档位。
+4. **只加不减**：套件不会删导出或改签名。若某天必须改，会先给 `W_DEPRECATED` 渲染期信号（**不是编译诊断**）并保留至少两个 minor 版本。
+5. **字号只从 harness 排版刻度取**：不要在画布里写 `fontSize` / 像素值 / `calc(base * 1.6)`。要新的档位就先改套件，并在「排版标准」里登记。
 
 ## 通用类型
 
 ~~~ts
 type Tone = "neutral" | "info" | "success" | "warning" | "danger";
-type Status = "pending" | "in_progress" | "completed" | "cancelled";
+type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
 ~~~
 
 | tone | 语义 | 典型用途 |
@@ -39,6 +40,28 @@ type Status = "pending" | "in_progress" | "completed" | "cancelled";
 | `"danger"` | 失败 / 回归 | 门禁红、编译错误 |
 
 `Text` 的 `tone` 额外接受 `"primary" | "secondary" | "tertiary"` 三个便利别名（映射到中性色的三个弱化档）。
+
+---
+
+## 排版标准
+
+画布活在右栏，右栏的正文基准是 **`--dsh-content-font-size-secondary`（13px）**，不是聊天区的 14px。所有字号都取 harness 排版 token 的**长写形式**（`--dsw-font-*-font-size` / `-line-height`）：简写 token（如 `--dsw-font-xs-13` = `13px/20px family`）作为 `font-size` 是无效值，会静默退回继承字号——这正是「有大有小」的成因。规则由套件内部执行，画布只选档：
+
+| 用法 | 组件 / prop | token | 实际 |
+|---|---|---|---|
+| 正文（默认） | `Text` | `--dsh-content-font-size-secondary` | 13 / 20 |
+| 小字 | `Text size="small"` | `--dsw-font-xxs-12` | 12 / 18 |
+| 注脚 | `Text size="caption"` | `--dsw-font-xxxs-11` | 11 / 14 |
+| 大字 | `Text size="large"` | `--dsw-font-s-14` | 14 / 22 |
+| 一级标题 | `H1` | `--dsw-font-l-20` | 20 / 28 · 500 |
+| 二级标题 | `H2` | `--dsw-font-base-strong-16` | 16 / 24 · 500 |
+| 指标数字 | `Stat` | `--dsw-font-l-20` | 20 / 28 · 600 |
+| 等宽 / 行内代码 | `Code` | `--dsw-font-markdown-code` + `--ds-font-family-code` | 12 / 19 |
+| 表格 | `Table` | 正文档 13 / 20，表头字重 500 | — |
+
+**`Code` 的字族是 `--ds-font-family-code`**。主题里**没有** `--dsw-font-mono`，裸 `var()` 是无效字族，会让代码块退回 UI 字体（已修的 bug，不要再写那个名字）。
+
+不要在画布里写 `style={{ fontSize: ... }}` 或 `calc(...)` 覆盖字号：绕开刻度就会重新变成「有大有小」。
 
 ---
 
@@ -223,6 +246,28 @@ type Status = "pending" | "in_progress" | "completed" | "cancelled";
 </Callout>
 ~~~
 
+### `KeyValue`
+
+对齐的「标签 / 值」字段表。详情面板字段超过 3 条时用它：标签落在同一列，值对齐成一条线，比一串 `Text` 更容易扫读。
+
+| prop | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `items` | `{ label: string; value: ReactNode; tone?: Tone }[]` | 必填 | 每行的标签与值；`tone` 只影响值的颜色 |
+| `columns` | `number` | `1` | 分栏数；字段多且面板宽时可以给 2 |
+| `dense` | `boolean` | `false` | 紧凑行距 |
+
+~~~tsx
+<KeyValue
+  dense
+  items={[
+    { label: "负责人", value: t.owner },
+    { label: "验收", value: t.acceptance },
+    { label: "阻塞", value: t.blocker === "" ? "无" : t.blocker, tone: t.blocker === "" ? "neutral" : "danger" },
+    { label: "证据", value: <Code>{t.evidence}</Code> },
+  ]}
+/>
+~~~
+
 ---
 
 ## 数据
@@ -257,7 +302,7 @@ type Status = "pending" | "in_progress" | "completed" | "cancelled";
 | `stickyHeader` | `boolean` | `false` | 表头吸顶 |
 | `onRowClick` | `(index: number) => void` | — | 整行可点 |
 | `emptyText` | `string` | `"No rows"` | 空数据文案 |
-| `maxRows` | `number` | `300` | 超出截断并报 `W_MANY_ROWS` |
+| `maxRows` | `number` | `300` | 超出截断并显示 `showing N of M`（渲染期文案） |
 
 ~~~tsx
 <Table
@@ -307,7 +352,7 @@ type Status = "pending" | "in_progress" | "completed" | "cancelled";
 
 | prop | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `todos` | `{ id: string; status: Status; content: ReactNode }[]` | 必填 | `status` 取 `pending \| in_progress \| completed \| cancelled` |
+| `todos` | `{ id: string; status: Status; content: ReactNode }[]` | 必填 | `status` 取 `pending \| in_progress \| blocked \| completed \| cancelled` |
 | `onTodoClick` | `(todo) => void` | — | 收到的是被点的那个 todo 对象 |
 | `dense` | `boolean` | `false` | 紧凑排版 |
 
@@ -317,6 +362,43 @@ type Status = "pending" | "in_progress" | "completed" | "cancelled";
   onTodoClick={(todo) => setActiveId(todo.id)}
 />
 ~~~
+
+### `Progress`
+
+横向进度条。看板的「到哪一步了」应该是形状，不是一个要人肉比较的数字。
+
+| prop | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `value` | `number` | 必填 | 当前值；默认按 0–100 解释 |
+| `max` | `number` | `100` | 量程；给非百分比数据时用 |
+| `tone` | `Tone` | `"info"` | 语义色 |
+| `label` | `string` | — | 左侧说明（例如「加权进度 · 12 人日」） |
+| `showValue` | `boolean` | `false` | 右端显示四舍五入的百分比 |
+| `size` | `"sm" \| "md"` | `"md"` | 轨道高度 |
+
+~~~tsx
+<Progress value={progressPct} showValue label="加权进度（按估算人日）" tone="success" />
+<Progress value={task.progress} size="sm" showValue />   {/* 表格里的单元格 */}
+~~~
+
+### `Timeline`
+
+纵向活动轨：什么时候发生了什么、证据是什么。状态只能说明「现在」，时间线才能暴露「停在哪」。
+
+| prop | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `events` | `{ id: string; at: string; title: ReactNode; tone?: Tone; detail?: ReactNode; ref?: string }[]` | 必填 | 新的在前（排序由调用方决定） |
+| `dense` | `boolean` | `false` | 紧凑行距 |
+
+~~~tsx
+<Timeline
+  events={DATA.activity.map((e) => ({
+    id: e.id, at: e.at, title: e.title, tone: e.tone, detail: e.detail, ref: e.ref,
+  }))}
+/>
+~~~
+
+> `at` 是数据，不是现场取的：`DATA` 里写字符串字面量；不要在画布里有「当前时间」这种会漂的状态。
 
 ---
 
@@ -410,7 +492,7 @@ useCanvasOverlay<T extends { id: string }>(
 
 > **实现要求**：`initial` 必须接受 `readonly T[]`。`export const DATA = { ... } as const` 产生的正是 readonly 字面量数组；若签名只收 `T[]`，每个画布都得写 `as unknown as T[]` 双重 cast（设计文档附录 A 就是这么写的，属于缺陷）。本模板与文档示例一律按 `readonly` 签名书写，不带 cast。
 >
-> **另一个书写要求**：`set(id, patch)` 的参数类型是 `Partial<T>`，所以**人会改的字段必须已经出现在 `DATA` 里**。又因为 `DATA` 用了 `as const`，字段是字面量类型，`overlay.set(id, { status: 'acked' })` 只有在 `'acked'` 已经出现在某个条目上时才通过类型检查。模板的做法是：board 让四种 status 各至少出现一次，gates 用 `acked` 作为一个显式取值。若不想受这个约束，可以不给 `DATA` 加 `as const`——代价是 `status` 退化为 `string`，`Record<Status, ...>` 查表会失配。
+> **另一个书写要求**：`set(id, patch)` 的参数类型是 `Partial<T>`，所以**人会改的字段必须已经出现在 `DATA` 里**。又因为 `DATA` 用了 `as const`，字段是字面量类型，`overlay.set(id, { status: 'acked' })` 只有在 `'acked'` 已经出现在某个条目上时才通过类型检查。模板的做法是：board 让五种 status 各至少出现一次，gates 用 `acked` 作为一个显式取值。若不想受这个约束，可以不给 `DATA` 加 `as const`——代价是 `status` 退化为 `string`，`Record<Status, ...>` 查表会失配。
 
 ~~~tsx
 const overlay = useCanvasOverlay("tasks", DATA.tasks);
@@ -435,7 +517,7 @@ useCanvasAction(): (action: CanvasAction) => Promise<ActionResult>
 | `openResource` | client | 直接打开一个 `dsh-resource://` 地址 |
 | `copy` | client | 写剪贴板 |
 | `startTurn` | host | 追加到当前会话（`newSession: true` 则新建会话）；有冷却与去重 |
-| `runCommand` | host | 仅 Config 白名单内的命令；受 permission preset 约束 |
+| `runCommand` | host | 仅 Config 白名单内登记过的命令；经 `ctx.shell` 执行，按调用 Session 的沙箱策略约束。返回真实 `exitCode` / `timedOut` / 输出尾部 |
 | `notify` | host | 宿主回 ok，由 client 显示提示条 |
 | `overlaySet` / `overlayClear` | host | 写 sidecar |
 
@@ -503,8 +585,10 @@ type CanvasAction =
   | { type: "overlayClear"; key: string; id?: string };
 
 type ActionResult =
-  | { ok: true; detail?: string }
-  | { ok: false; code: "denied" | "unsupported" | "failed"; message: string };
+  | { ok: true; detail?: string; code?: "ran"; exitCode?: number | null; signal?: string | null;
+      timedOut?: boolean; stdout?: string; stderr?: string;
+      sandbox?: { mode: string; denied: boolean; enforcement?: string; runnerFailed?: boolean } }
+  | { ok: false; code: "denied" | "unsupported" | "failed"; message: string; exitCode?: number | null };
 ~~~
 
 `runCommand` 必须给 `id`（对应 Config 白名单项的 id）或**完整命令字符串** `command`，二者都要逐字匹配白名单。
@@ -515,7 +599,7 @@ type ActionResult =
 
 | 情况 | 行为 |
 |---|---|
-| `Table` / `TodoList` 超过 `maxRows`（默认 300） | 截断，末尾显示 "showing N of M"，并报 `W_MANY_ROWS` |
+| `Table` / `TodoList` 超过 `maxRows`（默认 300） | 截断，末尾显示 "showing N of M"（渲染期文案，不产出编译诊断） |
 | 全局渲染行数超过 Config 的 `maxRenderRows`（默认 5000） | 硬上限，截断 |
 | `BarChart` 超过 40 个 category | 只渲染前 40 并提示 |
 | 源码 / 行数 / `DATA` 超软阈值 | `W_LARGE_FILE` 警告（不阻断） |

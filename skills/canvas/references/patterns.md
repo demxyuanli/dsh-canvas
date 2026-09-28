@@ -20,15 +20,51 @@
 **结构**
 
 ~~~text
-H1 + Text(目标一句话)
-Grid columns=3        -> Stat 总数 / 进行中 / 阻塞
-Callout (可选)         -> 不可违反的约束
-Row wrap              -> Pill 筛选（open / all / 按分组）
-Grid 1.1fr : 0.9fr
-  左: CollapsibleSection(每个分组) -> TodoList(该组条目)
-  右: Card 详情（字段 + 状态 Pill + 动作按钮）
-Table (可选)          -> 数值明细，数字列右对齐
+H1 + Text(目标) + Text(快照日 / 修订 / WIP 上限)
+Progress              -> 加权进度（按估算人日，不是条目计数）
+Grid columns=4        -> Stat 总数(带在办/关闭) / 在办-WIP / 阻塞 / 加权进度
+Callout               -> 从数据派生的风险清单（阻塞 / 超期未更新 / WIP 超限 / 超估算）
+Row wrap              -> Pill 筛选（在办 / 阻塞 / 已关闭 / 全部 / 按分组）
+Grid 1.05fr : 0.95fr
+  左: CollapsibleSection(每组, trailing=在办数·完成%) -> Progress(该组) + TodoList
+      末尾: CollapsibleSection(已关闭) -> TodoList(dense)
+  右: Card 详情 -> Progress + KeyValue(字段) + 动作按钮
+Grid columns=3        -> "下一步"：按优先级取前 3 条，各带一个开始按钮
+Table                 -> 明细：ID / 优先 / 分组 / 标题 / 状态 / 负责人 / 进度 / 更新
+CollapsibleSection    -> 活动时间线（Timeline）+ 维护说明
 ~~~
+
+**每个条目要有的字段**（少一个，跟踪就断一条）
+
+| 字段 | 回答的问题 |
+|---|---|
+| `status` | 到哪一步了：`pending \| in_progress \| blocked \| completed \| cancelled` |
+| `progress` + `estimate` + `actual` | 还要多少、已经花了多少（进度条与加权进度都从它算） |
+| `startedAt` / `updatedAt` / `completedAt` | 停了多久、多久没动过（陈旧 = 需要复核） |
+| `blocker` | 卡在哪；非空即算阻塞，必须写明在等谁 |
+| `next` | 下一步动作一句话；它同时是 `startTurn` 的输入 |
+| `acceptance` | 怎样算完成（可核对的断言，不是「做完」） |
+| `evidence` | 结论指向的文件:行 / 测试名 / 运行编号 |
+| `lane` / `priority` / `owner` | 分组、排序与认领 |
+
+**派生分析一律现算，不手抄**
+
+统计、加权进度、风险清单、下一步都从 `DATA` 现算：手抄的数字会先于现实过期，而且无法复核。
+
+~~~tsx
+const counted = tasks.filter((t) => t.status !== "cancelled");          // 取消的不计入分母
+const estTotal = counted.reduce((s, t) => s + t.estimate, 0);
+const weighted = counted.reduce((s, t) => s + t.estimate * progressOf(t), 0);
+const progressPct = estTotal === 0 ? 0 : Math.round(weighted / estTotal);
+
+const blocked = tasks.filter((t) => t.status === "blocked" || (t.blocker !== "" && isOpen(t)));
+const stale = open.filter((t) => (daysBetween(t.updatedAt, DATA.asOf) ?? 0) > DATA.staleDays);
+const risks = [];
+if (blocked.length > 0) risks.push(blocked.length + " 条阻塞：" + blocked.map((t) => t.id).join("、"));
+if (wip.length > DATA.wipLimit) risks.push("在办超过 WIP 上限 " + DATA.wipLimit);
+~~~
+
+> `asOf` 是**数据里的快照日**。所有「多少天没动」都相对它算，不要用 `Date.now()`：画布是快照，不是一个会自己漂的时钟。
 
 **关键片段：筛选 + 选中 + 人的状态改动**
 
@@ -42,7 +78,7 @@ const merged = useMemo(
   () => overlay.items.map((t) => ({ ...t, status: (t.status ?? "pending") })),
   [overlay.items],
 );
-const open = merged.filter((t) => t.status === "pending" || t.status === "in_progress");
+const open = merged.filter((t) => t.status === "pending" || t.status === "in_progress" || t.status === "blocked");
 const visible = filter === "open" ? open : merged;
 const active = merged.find((t) => t.id === activeId) ?? open[0];
 ~~~
@@ -69,9 +105,11 @@ const active = merged.find((t) => t.id === activeId) ?? open[0];
 **注意事项**
 
 - **状态一定要走 `useCanvasOverlay`**：人要能用面板改状态，而你下一轮必须看得见。放 `useCanvasState` 等于人白点。
-- 分组（`lane` / `bucket`）用 `CollapsibleSection` 包一组 `TodoList`，而不是一个巨大的扁平列表。
-- 详情卡里字段不要超过 6 行；更长的说明留一个 `note` 引用（文件:行 或"见 t323"）。
-- 内联只留"当前窗口"：未完成 + 最近完成。归档进折叠区或另一张画布。
+- **`blocked` 是状态，不是备注**：写在 `blocker` 字段里，面板才能把它算进风险清单；只写在 `note` 里等于没跟踪。
+- 分组（`lane` / `bucket`）用 `CollapsibleSection` 包一组 `TodoList`，而不是一个巨大的扁平列表；组头带「在办数 · 完成%」。
+- 详情卡用 `KeyValue` 排列字段，不要堆一长串 `Text`；字段超过 8 条就把历史挪进时间线。
+- 进度用 `Progress`，更新用 `updatedAt`：只给状态不给进度，人看不出是在推进还是在原地打转。
+- 内联只留"当前窗口"：在办 + 最近完成。归档进折叠区或另一张画布。
 
 ---
 

@@ -1,11 +1,13 @@
 ---
 name: canvas
-description: Use when work needs a persistent, interactive, multi-item status surface for both the human and the agent — a board, a gate/CI dashboard, a timeline, or a comparison table — instead of prose, a growing markdown spec, or a short todo list. Covers when to write a canvas, how to author and update a *.canvas.tsx file, how to check it, and how its state stays consistent between the human and the agent.
+description: Use when the user asks for a project canvas, 看板, 画布, 画板, board, dashboard, or a multi-item status surface — a persistent, interactive audit/engineering-analysis view for both the human and the agent — instead of prose, a growing markdown spec, or a short todo list. Covers the intake first, then when to write a canvas, how to author and update a *.canvas.tsx file, how to check it, and how its state stays consistent between the human and the agent.
 ---
 
 # Canvas（`*.canvas.tsx`）
 
 画布是**能编译、能交互、能回灌 agent** 的产物：agent 写一个 `*.canvas.tsx` 文件，宿主实时编译并渲染成右栏 tab。面板上的按钮可以打开文件、发起新回合、跑白名单命令。
+
+画布类请求有一个 host 侧**意图入口**（`agent/pre-step` hook）：用户说"建个项目的 canvas / 看板 / 画布 / 画板 / 项目文档"时，它会把 [references/intake.md](references/intake.md) 的摘要注入当前步骤。**这句话的含义是「用画布承载审计与工程分析」**——先做 intake 对齐口径，再写文件；直接产出一个只有标题与状态的薄看板等于没接住入口。
 
 先读 [references/kit.md](references/kit.md) 拿到完整套件 API，再照 [templates/board.canvas.tsx](templates/board.canvas.tsx) 起步。
 
@@ -31,6 +33,7 @@ description: Use when work needs a persistent, interactive, multi-item status su
 
 ## 流程
 
+0. **做 intake**：按 [references/intake.md](references/intake.md) 的 7 条与用户对齐（每条给一个默认值，只问一次），拿到确认或"你看着办"再往下。**不要在没对齐前写文件。**
 1. **建脚手架**：用 `canvas_new`（`kind: "blank" | "board" | "gates"`）。不要从空白文件手写，会漏掉元数据头与 `DATA` 形状。
 2. **先只填数据**：把条目写进 `export const DATA = { ... } as const`。这一步不碰渲染代码——模板里的渲染代码通常已经够用。
 3. **需要时才改渲染**：只当现有范式都不合用时才动 JSX。改之前先读 [references/patterns.md](references/patterns.md)。
@@ -97,6 +100,7 @@ canvas_read(path, "tasks", { status: "pending" })   # 只取要动的那些
 
 | 任务 | 文件 |
 |---|---|
+| **入口 intake（审计 / 工程分析 → 画布）** | [references/intake.md](references/intake.md) |
 | 套件完整 API（组件 props、tone 枚举、钩子签名、CanvasAction） | [references/kit.md](references/kit.md) |
 | 四类画布范式（看板 / 门禁 / 时间线 / 对比）与关键片段 | [references/patterns.md](references/patterns.md) |
 | 诊断码逐条修法（`E_PARSE` / `E_DATA_NOT_LITERAL` / `W_LARGE_FILE` ...） | [references/troubleshooting.md](references/troubleshooting.md) |

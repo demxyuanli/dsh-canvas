@@ -15,19 +15,21 @@ type CanvasDiagnostic = {
 
 ## 速查
 
-| 码 | 级别 | 一句话 | 修法要点 |
-|---|---|---|---|
-| `E_PARSE` | error | 语法 / TS 解析失败 | 看行列号，通常是 JSX 标签不配对 |
-| `E_PARSE_IMPORT` | error | import 了非 `dsh/canvas` 的模块 | 只用 `dsh/canvas` |
-| `E_NO_DEFAULT` | error | 缺 `export default` | 导出一个无参组件 |
-| `E_SIDE_EFFECT` | error | 顶层副作用 | I/O 与定时器移出模块顶层 |
-| `E_DYNAMIC` | error | `eval` / `new Function` / 动态 `import()` | 改成普通分支 |
-| `E_EXTERNAL` | error | 远程资源 / iframe | 去掉；用内联 SVG |
-| `E_DATA_NOT_LITERAL` | error | `DATA` 不是纯字面量 | 把值写成字面量，计算放渲染期 |
-| `E_TOO_LARGE` | error | 超硬阈值，拒绝编译 | 拆画布 / 外置历史 |
-| `W_NO_DATA` | warning | 没有 `export const DATA` | 把数据搬进 `DATA` |
-| `W_LARGE_FILE` | warning | 超软阈值 | 拆画布 / 用引用替代长字段 |
-| `W_MANY_ROWS` | warning | 渲染行数被截断 | 加筛选器；**只在渲染期出现** |
+| 码 | 级别 | 产出方 | 一句话 | 修法要点 |
+|---|---|---|---|---|
+| `E_PARSE` | error | sucrase | 语法 / TS 解析失败 | 看行列号，通常是 JSX 标签不配对 |
+| `E_PARSE_IMPORT` | error | 扫描 | import 了非 `dsh/canvas` 的模块 | 只用 `dsh/canvas`（`import React` 也归这条） |
+| `E_NO_DEFAULT` | error | 编译管线 | 缺 `export default` | 导出一个无参组件 |
+| `E_SIDE_EFFECT` | error | 扫描 | 顶层副作用 | I/O 与定时器移出模块顶层 |
+| `E_DYNAMIC` | error | 扫描 | `eval` / `new Function` / 动态 `import()` | 改成普通分支 |
+| `E_EXTERNAL` | error | 扫描 | 远程资源 / iframe | 去掉；用内联 SVG |
+| `E_DATA_NOT_LITERAL` | error | 抽取 | `DATA` 不是纯字面量 | 把值写成字面量，计算放渲染期 |
+| `E_MERGE` | error | `canvas_state_merge` | 读不出 `DATA` | `DATA` 必须是对象字面量，且每行有 `id` |
+| `E_TOO_LARGE` | error | 编译管线 | 超硬阈值，拒绝编译 | 拆画布 / 外置历史 |
+| `W_NO_DATA` | warning | 抽取 | 没有 `export const DATA` | 把数据搬进 `DATA` |
+| `W_LARGE_FILE` | warning | 编译管线 | 超软阈值 | 拆画布 / 用引用替代长字段 |
+| `W_REMOTE_URL` | warning | 扫描 | 源码里出现 `http(s)://` | 画布不能拉远程内容；内联数据 |
+| `W_MANY_ROWS` | warning | **渲染期文案（不是诊断）** | 行数被截断 | 加筛选器 |
 
 ---
 
@@ -62,7 +64,7 @@ type CanvasDiagnostic = {
 ~~~tsx
 import _ from "lodash";                    // 第三方
 import { helper } from "./helper";          // 相对路径
-import React from "react";                  // 见 E_REACT_IMPORT
+import React from "react";                  // 同样归 E_PARSE_IMPORT（§21 D2 已删掉专用码）
 import { LineChart } from "recharts";       // 图表库
 ~~~
 
@@ -180,6 +182,21 @@ export const DATA = {
 
 ---
 
+## E_MERGE
+
+**含义**：`canvas_state_merge` 想在源文件里定位 `export const DATA` 的字段跨度，但没找到可解析的对象字面量。它不是编译错误——画布可能照常渲染——只是"把 sidecar 固化回源文件"这一步做不了。
+
+**典型原因**
+
+- 文件里没有 `export const DATA`（先补 `DATA`，见 `W_NO_DATA`）。
+- `DATA` 不是对象字面量（例如导出了数组或标识符）。
+- `DATA` 里有非字面量，宽容解析器读不下去（同 `E_DATA_NOT_LITERAL`）。
+- 目标数组的条目缺少 `id`：merge 靠 `id` 找行；没有 `id` 的行会被跳过而不是猜。
+
+**修法**：把 `DATA` 修成"对象 + 每个条目有 `id` + 纯字面量"，再重跑 `canvas_state_merge`。未命中的 id 会出现在返回的 `skipped` 里，不会静默丢弃。
+
+---
+
 ## E_TOO_LARGE
 
 **含义**：超过硬阈值，直接拒绝编译。默认：源码 1 MB / 8000 行 / `DATA` 4 MB（可在 Config 覆盖）。
@@ -233,14 +250,18 @@ export const DATA = {
 
 ---
 
-## 已知的口径缺口（实现前需定）
+## 诊断码的口径（已定）
 
-下面三条在当前文档里口径不一致，写在这里以免你在排错时误判。**实现时以其中一条为准，并回写 `INTERFACE.md`。**
+DESIGN §21 已经逐条裁决。下面是最终归属；排错时不要按旧文档猜。
 
-| 码 | 现状 | 建议 |
+| 码 | 归属 | 说明 |
 |---|---|---|
-| `E_REACT_IMPORT` | 设计文档 §5.3 提到"`import React from "react"` 报此码"，但 §6.6 的诊断码联合里没有它；而 §6.3 又说"任何其它说明符 → `E_PARSE_IMPORT`"。两条码谁先触发未定。 | 二选一并写进 `INTERFACE.md`。若保留，明确优先级：react 专用码优先于通用的 `E_PARSE_IMPORT`。 |
-| `W_UNKNOWN_PROP` | 出现在 §6.6 的联合里，但**没有任何检查定义**（组件未知 prop 的检测既非编译期也非渲染期，需要运行时比对）。 | 要么实现为编译期 prop 白名单检查，要么从联合里删除。当前不要依赖它。 |
-| `W_DEPRECATED` | §8.1 与 §19 都引用它作为套件弃用通道，但不在 §6.6 的联合里。 | 补进联合，并按"文档标注 → 警告 → 两个 minor 后移除"的三步走实现。 |
+| `E_REACT_IMPORT` | **已删除** | `import React from "react"` 报 `E_PARSE_IMPORT`——允许的模块集合只有 `dsh/canvas`（§21 D2）。 |
+| `W_UNKNOWN_PROP` | **reserved，不产出** | 需要 per-component prop 表才能实现；当前不要依赖它（§21 D3）。 |
+| `W_DEPRECATED` | **client 渲染期信号** | 套件真要做破坏性变更时才启用；它不是 host 编译诊断（§21 D4）。 |
+| `W_MANY_ROWS` | **渲染期文案** | 超过 `maxRows` 只显示 `showing N of M`，不产出编译诊断（§21 D5）。 |
+| `W_NO_METADATA` | **reserved，不产出** | discovery 直接内联返回 metadata，不再需要这条码。 |
 
-另外，`W_MANY_ROWS` 属于**渲染期**条件，与"编译期产生诊断"的主管线不同源（见上文）。若希望它能被 `canvas_check` 捕获，需要额外做静态行数估算——目前没有。
+**产出方只有两个**：host（扫描 / 编译器 / 抽取 / `canvas_state_merge`）与 client（渲染期文案）。`canvas_check` 只看得到 host 的那部分。
+
+> `W_MANY_ROWS` 属于渲染期条件，与"编译期产生诊断"的主管线不同源。若希望它能被 `canvas_check` 捕获，需要额外做静态行数估算——目前没有。

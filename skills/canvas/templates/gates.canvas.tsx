@@ -101,22 +101,34 @@ export default function GateDashboard() {
   const run = async (g: (typeof DATA.gates)[number]) => {
     const r = await dispatch({ type: "runCommand", id: g.runId });
     if (!r.ok) {
-      // 白名单未登记或权限不足：在画布上说出来，不要静默失败。
+      // 白名单未登记、ctx.shell 缺失或启动失败：在画布上说出来，不要静默失败。
       await dispatch({ type: "notify", tone: "warning", message: g.id + " 未执行: " + r.message });
+      return;
     }
+    // 动作成功 != 门禁通过：退出码才是结果，红门禁必须红着显示。
+    await dispatch({
+      type: "notify",
+      tone: r.exitCode === 0 ? "success" : "warning",
+      message: g.id + " exit=" + String(r.exitCode) + (r.timedOut === true ? "（超时）" : ""),
+    });
   };
 
   // 顺序执行：门禁通常是重命令（编译 / 对拍），并发触发会互相抢资源。
   const runAll = async () => {
+    // 顺序执行：门禁通常是重命令（编译 / 对拍），并发触发会互相抢资源。
     let denied = 0;
+    let failed = 0;
     for (const g of gates) {
       const r = await dispatch({ type: "runCommand", id: g.runId });
       if (!r.ok) denied += 1;
+      else if (r.exitCode !== 0) failed += 1;
     }
     await dispatch({
       type: "notify",
-      tone: denied > 0 ? "warning" : "info",
-      message: denied > 0 ? String(denied) + " 条门禁未执行（白名单 / 权限）" : "已触发全部门禁",
+      tone: denied > 0 || failed > 0 ? "warning" : "info",
+      message: denied > 0 || failed > 0
+        ? String(denied) + " 条未执行（白名单 / 权限），" + String(failed) + " 条非零退出"
+        : "全部门禁退出码为 0",
     });
   };
 

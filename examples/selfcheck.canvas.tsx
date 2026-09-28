@@ -6,6 +6,7 @@
 import {
   H1, H2, Text, Code, Stack, Row, Grid, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, BarChart, TodoList, Pill, Button, CollapsibleSection,
+  Progress, KeyValue, Timeline,
   useCanvasState, useCanvasOverlay, useCanvasAction, useMemo,
 } from "dsh/canvas";
 
@@ -15,19 +16,40 @@ type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 export const DATA = {
   checks: [
     { id: "c1", title: "compile -> serve -> import -> render", status: "completed",
-      host: "test/serve.test.mjs", note: "13 assertions" },
+      host: "test/serve.test.mjs", note: "22 assertions" },
     { id: "c2", title: "literal DATA extraction", status: "completed",
       host: "test/core.test.mjs", note: "15 assertions" },
-    { id: "c3", title: "client bundle served by the GUI", status: "pending",
-      host: "/plugins/@local/dsh-canvas/client.js", note: "needs a GUI restart" },
+    { id: "c3", title: "client bundle served and rendered by the GUI", status: "completed",
+      host: "/plugins/@local/dsh-canvas/client.js", note: "renders in the running page" },
     { id: "c4", title: "sidecar overlay round-trip", status: "completed",
       host: ".canvas/<stem>.state.json", note: "verified on disk" },
+    { id: "c5", title: "human edits merge back into DATA", status: "completed",
+      host: "test/merge.test.mjs + test/tools.test.mjs", note: "20 assertions" },
+    { id: "c6", title: "canvas intent entry on agent/pre-step", status: "completed",
+      host: "test/intent.test.mjs", note: "13 assertions" },
+    { id: "c7", title: "canvas tab owns its scroll container and padding", status: "completed",
+      host: "test/client.test.mjs", note: "asserted on both render paths" },
+    { id: "c8", title: "typography mapped to the harness scale", status: "completed",
+      host: "test/client.test.mjs", note: "13px base, no multiplier" },
+    { id: "c9", title: "startTurn passes mode + AbortSignal", status: "completed",
+      host: "test/serve.test.mjs", note: "the button really queues a turn" },
+    { id: "c10", title: "action envelope matches on both halves", status: "completed",
+      host: "test/client.test.mjs", note: "client body asserted, host tolerant" },
+    { id: "c11", title: "runCommand verified on the live host", status: "completed",
+      host: "POST /canvas/action", note: "gate:tests + gate:templates exit=0" },
+    { id: "c12", title: "intent entry ignores canvas-submitted tasks", status: "completed",
+      host: "test/intent.test.mjs", note: "canvas-* rpcId filtered" },
   ],
   series: [
-    { name: "host tests", data: [13, 15, 0] , tone: "info" },
+    { name: "host tests", data: [16, 15, 0] , tone: "info" },
     { name: "browser tests", data: [0, 0, 0], tone: "warning" },
   ],
   stages: ["host e2e", "host core", "browser"],
+  activity: [
+    { id: "a1", at: "2026-09-27", title: "host pipeline verified", tone: "success", detail: "compile / module / action / sidecar over HTTP", ref: "test/serve.test.mjs" },
+    { id: "a2", at: "2026-09-28", title: "canvas tab renders in the GUI", tone: "success", detail: "kit v1.1 components render; tab body now owns its scroll container", ref: "lib/client.js" },
+    { id: "a3", at: "2026-09-28", title: "typography mapped to the harness scale", tone: "success", detail: "sidebar base is 13px; the invalid --dsw-font-mono token is gone", ref: "lib/client.js" },
+  ],
 } as const;
 
 const STATUS_TONE: Record<Status, Tone> = {
@@ -66,7 +88,7 @@ export default function SelfCheck() {
 
       <Grid columns={3} gap={12}>
         <Stat value={String(done) + "/" + String(rows.length)} label="Stages verified" tone="success" />
-        <Stat value="28" label="Host assertions" tone="info" />
+        <Stat value="94" label="Host assertions" tone="info" />
         <Stat value="0" label="Browser assertions" tone="warning" hint="no browser control in this session" />
       </Grid>
 
@@ -112,8 +134,19 @@ export default function SelfCheck() {
             <CardBody>
               <Stack gap={10}>
                 <Text weight="semibold">{active.title}</Text>
-                <Text size="small">Harness: <Code>{active.host}</Code></Text>
-                <Text size="small" tone="tertiary">{active.note}</Text>
+                <Progress
+                  value={active.status === "completed" ? 100 : active.status === "in_progress" ? 50 : 0}
+                  size="sm"
+                  showValue
+                  label="check progress"
+                />
+                <KeyValue
+                  dense
+                  items={[
+                    { label: "Harness", value: <Code>{active.host}</Code> },
+                    { label: "Note", value: active.note },
+                  ]}
+                />
                 <Divider />
                 <Row gap={8} wrap>
                   <Button
@@ -145,6 +178,15 @@ export default function SelfCheck() {
         rows={rows.map((row) => [row.id, row.title, row.host, row.status])}
         onRowClick={(index) => setActiveId(rows[index].id)}
       />
+
+      <CollapsibleSection title="Activity" count={DATA.activity.length} defaultOpen>
+        <Timeline
+          events={DATA.activity.map((event) => ({
+            id: event.id, at: event.at, title: event.title,
+            tone: event.tone, detail: event.detail, ref: event.ref,
+          }))}
+        />
+      </CollapsibleSection>
     </Stack>
   );
 }

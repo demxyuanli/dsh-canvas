@@ -50,61 +50,82 @@ function parseString(text, i) {
   throw new Error("unterminated string");
 }
 
-function parseValue(text, i) {
-  i = skipSpace(text, i);
-  const ch = text[i];
+/**
+ * Parse one value while recording the source spans a merge-back needs.
+ * The plain parser below is this parser minus the bookkeeping, so
+ * canvas_read and canvas_state_merge can never disagree about what DATA is.
+ * @param text - source text.
+ * @param i - index of the value's first character.
+ * @returns { kind, value, start, end, fields?, fieldOrder?, items? }; object
+ *   fields map name -> { value, valueStart, valueEnd, keyStart, node }.
+ */
+export function parseValueSpanned(text, i) {
+  const start = skipSpace(text, i);
+  const ch = text[start];
   if (ch === "{") {
     const obj = {};
-    i = skipSpace(text, i + 1);
-    if (text[i] === "}") return { value: obj, end: i + 1 };
+    const fields = {};
+    const fieldOrder = [];
+    let cursor = skipSpace(text, start + 1);
+    if (text[cursor] === "}") return { kind: "object", value: obj, start, end: cursor + 1, fields, fieldOrder };
     for (;;) {
-      i = skipSpace(text, i);
+      cursor = skipSpace(text, cursor);
+      const keyStart = cursor;
       let key;
-      if (text[i] === "\"" || text[i] === "'") { const s = parseString(text, i); key = s.value; i = s.end; }
+      if (text[cursor] === "\"" || text[cursor] === "'") { const s = parseString(text, cursor); key = s.value; cursor = s.end; }
       else {
-        const m = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(text.slice(i));
+        const m = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(text.slice(cursor));
         if (m === null) throw new Error("expected a property name");
         key = m[0];
-        i += key.length;
+        cursor += key.length;
       }
-      i = skipSpace(text, i);
-      if (text[i] !== ":") throw new Error("expected \":\" after property " + key);
-      const v = parseValue(text, i + 1);
+      cursor = skipSpace(text, cursor);
+      if (text[cursor] !== ":") throw new Error("expected \":\" after property " + key);
+      const v = parseValueSpanned(text, cursor + 1);
       obj[key] = v.value;
-      i = skipSpace(text, v.end);
-      if (text[i] === ",") { i = skipSpace(text, i + 1); if (text[i] === "}") return { value: obj, end: i + 1 }; continue; }
-      if (text[i] === "}") return { value: obj, end: i + 1 };
+      fields[key] = { value: v.value, valueStart: v.start, valueEnd: v.end, keyStart, node: v };
+      fieldOrder.push(key);
+      cursor = skipSpace(text, v.end);
+      if (text[cursor] === ",") { cursor = skipSpace(text, cursor + 1); if (text[cursor] === "}") return { kind: "object", value: obj, start, end: cursor + 1, fields, fieldOrder }; continue; }
+      if (text[cursor] === "}") return { kind: "object", value: obj, start, end: cursor + 1, fields, fieldOrder };
       throw new Error("expected \",\" or \"}\" in object");
     }
   }
   if (ch === "[") {
     const arr = [];
-    i = skipSpace(text, i + 1);
-    if (text[i] === "]") return { value: arr, end: i + 1 };
+    const items = [];
+    let cursor = skipSpace(text, start + 1);
+    if (text[cursor] === "]") return { kind: "array", value: arr, start, end: cursor + 1, items };
     for (;;) {
-      const v = parseValue(text, i);
+      const v = parseValueSpanned(text, cursor);
       arr.push(v.value);
-      i = skipSpace(text, v.end);
-      if (text[i] === ",") { i = skipSpace(text, i + 1); if (text[i] === "]") return { value: arr, end: i + 1 }; continue; }
-      if (text[i] === "]") return { value: arr, end: i + 1 };
+      items.push(v);
+      cursor = skipSpace(text, v.end);
+      if (text[cursor] === ",") { cursor = skipSpace(text, cursor + 1); if (text[cursor] === "]") return { kind: "array", value: arr, start, end: cursor + 1, items }; continue; }
+      if (text[cursor] === "]") return { kind: "array", value: arr, start, end: cursor + 1, items };
       throw new Error("expected \",\" or \"]\" in array");
     }
   }
-  if (ch === "\"" || ch === "'") return parseString(text, i);
+  if (ch === "\"" || ch === "'") { const s = parseString(text, start); return { kind: "scalar", value: s.value, start, end: s.end }; }
   if (ch === "`") throw new Error("template strings are not allowed in DATA");
-  const num = /^-?(?:0[xX][0-9a-fA-F]+|\d+\.?\d*(?:[eE][-+]?\d+)?|\.\d+)/.exec(text.slice(i));
-  if (num !== null) return { value: Number(num[0]), end: i + num[0].length };
-  const word = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(text.slice(i));
+  const num = /^-?(?:0[xX][0-9a-fA-F]+|\d+\.?\d*(?:[eE][-+]?\d+)?|\.\d+)/.exec(text.slice(start));
+  if (num !== null) return { kind: "scalar", value: Number(num[0]), start, end: start + num[0].length };
+  const word = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(text.slice(start));
   if (word !== null) {
     const w = word[0];
-    if (w === "true") return { value: true, end: i + 4 };
-    if (w === "false") return { value: false, end: i + 5 };
-    if (w === "null") return { value: null, end: i + 4 };
-    if (w === "undefined") return { value: null, end: i + 9 };
-    if (w === "NaN") return { value: null, end: i + 3 };
+    if (w === "true") return { kind: "scalar", value: true, start, end: start + 4 };
+    if (w === "false") return { kind: "scalar", value: false, start, end: start + 5 };
+    if (w === "null") return { kind: "scalar", value: null, start, end: start + 4 };
+    if (w === "undefined") return { kind: "scalar", value: null, start, end: start + 9 };
+    if (w === "NaN") return { kind: "scalar", value: null, start, end: start + 3 };
     throw new Error("DATA may not reference the identifier " + w);
   }
   throw new Error("unexpected character " + JSON.stringify(ch ?? "end of input"));
+}
+
+function parseValue(text, i) {
+  const node = parseValueSpanned(text, i);
+  return { value: node.value, end: node.end };
 }
 
 /**

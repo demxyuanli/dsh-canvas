@@ -10,3 +10,5 @@
         compileTimeoutMs: 2000
         commandWhitelist: []
         startTurnCooldownMs: 30000
+        intentHook: true
+        intentKeywords: []

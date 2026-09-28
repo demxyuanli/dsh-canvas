@@ -1,13 +1,19 @@
 /** Canvas diagnostic codes. One structure serves the tool, the error card, and the host log. */
 
-// Emitted today: E_PARSE, E_PARSE_IMPORT, E_NO_DEFAULT, E_SIDE_EFFECT,
-// E_DYNAMIC, E_EXTERNAL, E_DATA_NOT_LITERAL, E_TOO_LARGE, W_NO_DATA,
-// W_LARGE_FILE, W_REMOTE_URL  (all by the compile-time scanner).
-// Reserved, carried here so the registry and the docs agree on names:
-// W_UNKNOWN_PROP (needs a per-component prop table in the checker),
-// W_MANY_ROWS (a render-time condition, never a compile diagnostic),
-// W_DEPRECATED (a client-runtime kit signal, not a host diagnostic),
-// W_NO_METADATA (discovery reports metadata inline instead).
+// Emitted today, by producer:
+//   compile-time scanner: E_PARSE_IMPORT, E_SIDE_EFFECT, E_DYNAMIC, E_EXTERNAL,
+//     W_REMOTE_URL
+//   sucrase transform:    E_PARSE
+//   compile pipeline:     E_NO_DEFAULT, E_DATA_NOT_LITERAL, E_TOO_LARGE,
+//     W_NO_DATA, W_LARGE_FILE
+//   canvas_state_merge:   E_MERGE
+// Reserved, carried so the registry and the docs agree on names (never emitted):
+//   W_UNKNOWN_PROP (needs a per-component prop table in the checker)
+//   W_MANY_ROWS    (a render-time wording, never a compile diagnostic)
+//   W_DEPRECATED   (a client-runtime kit signal, not a host diagnostic)
+//   W_NO_METADATA  (discovery reports metadata inline instead)
+// E_REACT_IMPORT is deleted (DESIGN section 21 D2): "import React from 'react'"
+// is E_PARSE_IMPORT, because the allowed module set has exactly one entry.
 export const CODES = {
   E_PARSE:            { severity: "error",   hint: "Fix the syntax at the reported line; sucrase could not transform the file." },
   E_PARSE_IMPORT:     { severity: "error",   hint: "A canvas may import only \"dsh/canvas\". React and the kit are injected by the host." },
@@ -23,6 +29,7 @@ export const CODES = {
   W_UNKNOWN_PROP:     { severity: "warning", hint: "Check the prop name against skills/canvas/references/kit.md." },
   W_REMOTE_URL:       { severity: "warning", hint: "A canvas cannot fetch remote content; embed the data instead." },
   W_NO_METADATA:      { severity: "warning", hint: "Add a /** @canvas title: ... */ header so the canvas directory can label it." },
+  E_MERGE:            { severity: "error",   hint: "canvas_state_merge needs an object-literal export const DATA with an id on every row; fix DATA, then retry the merge." },
 };
 
 /**

@@ -37,6 +37,15 @@ for (const file of corpus) {
     for (const d of errors) console.log("     " + d.code + (d.line === undefined ? "" : " line " + d.line) + ": " + d.message);
     continue;
   }
+  // The board is the tracking template: a thin row would silently undo the
+  // detail/analysis it exists for, so the shape is part of the contract.
+  if (rel.endsWith("board.canvas.tsx")) {
+    const tasks = result.data === undefined ? undefined : result.data.tasks;
+    assert.ok(Array.isArray(tasks) && tasks.length > 0, "board template must ship tasks");
+    for (const field of ["id", "lane", "status", "priority", "owner", "progress", "estimate", "actual", "startedAt", "updatedAt", "blocker", "goal", "next", "acceptance", "evidence", "write"]) {
+      for (const task of tasks) assert.ok(task[field] !== undefined, "board task " + task.id + " is missing " + field);
+    }
+  }
   pass++;
   const dataKeys = result.data === undefined ? "none" : Object.keys(result.data).join(",");
   console.log("ok   " + rel + "  lines=" + result.lines + "  DATA={" + dataKeys + "}" + (warnings.length === 0 ? "" : "  warnings=" + warnings.map((w) => w.code).join(",")));

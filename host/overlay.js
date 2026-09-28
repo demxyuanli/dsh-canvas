@@ -72,6 +72,33 @@ export async function writeOverlay(canvasPath, change) {
 }
 
 /**
+ * Drop entries that a merge just landed in the source, writing at most once.
+ * Empty buckets disappear, so a fully merged sidecar stops existing.
+ * @param canvasPath - the canvas the sidecar belongs to.
+ * @param entries - [{ key, id }] pairs that were merged.
+ * @returns the sidecar document after the removal (unchanged when nothing matched).
+ */
+export async function removeOverlayEntries(canvasPath, entries) {
+  const doc = await readOverlay(canvasPath);
+  let touched = false;
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const bucket = doc.overlays[entry.key];
+    if (bucket === undefined || bucket[entry.id] === undefined) continue;
+    delete bucket[entry.id];
+    if (Object.keys(bucket).length === 0) delete doc.overlays[entry.key];
+    touched = true;
+  }
+  if (!touched) return doc;
+  doc.updatedAt = new Date().toISOString();
+  const target = overlayPathFor(canvasPath);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const tmp = target + ".tmp-" + process.pid + "-" + Date.now();
+  await fs.writeFile(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
+  await fs.rename(tmp, target);
+  return doc;
+}
+
+/**
  * Merge sidecar patches into inline rows, marking stale and orphan entries.
  * @param rows - the DATA rows for one key.
  * @param bucket - overlays[key].

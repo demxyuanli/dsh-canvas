@@ -1167,3 +1167,188 @@ guide: [{ id: "workspace", commandId: "workspace.files", order: 10,
 3. **文件地址需要 Session id，且要按段编码**：`dsh-resource://file/session/<sessionId>/<path>`。随包实现的 `sessionFileAddress` 用 `encodeURIComponent` 逐段编码并保留 `:` 字面量（盘符），前导 `./` 去掉、绝对路径保留原样（Host 接受绝对路径）。Session id 的来源顺序：tab 地址里的 → `ctx.sidebarRight.mounted.get()`（`ObservableSnapshot<SessionId|undefined>`）。**拿不到 Session 时不要编一个**（早期实现会写成 `session/local/...` 然后静默打不开），应当返回干净的失败。
 
 **第三次"测试与代码同错"**：修这一处时我的替换只落了一半（调用点改了、helper 没插进去），`node --check` 和全部测试照样绿 —— 因为测试从不执行点击路径。已加守卫：`test/client.test.mjs` 断言打开路径调用的每个 helper 都有声明、被替换掉的 `fileAddressOf` 必须消失。凡是"测试从不执行、只在浏览器里发生"的路径，至少要有声明级守卫。
+
+---
+
+## 22. 修订记录（2026-09-28，看板质量审计）
+
+对看板的评审结论是四条：**内容不够详细、分析不够合理、任务跟踪不够完善、显示不够优雅**。逐条落到实现：
+
+| 症状 | 根因 | 落地 |
+|---|---|---|
+| 内容不够详细 | 模板每行只有 6 个字段，详情卡只有 4 行文本 | board 模板改为 19 字段/条（含 `acceptance` / `evidence` / `next` / `blocker` / 三个日期 / `estimate`+`actual`） |
+| 分析不够合理 | 看板只数条目，唯一「分析」是一句固定 Callout | 派生加权进度（按估算人日）、WIP 超限、陈旧、超估算四类风险，Callout 与 Stat 全部从 `DATA` 现算 |
+| 任务跟踪不够完善 | 没有 `blocked` 状态、没有时间维度、没有下一步与验收；分组只在筛选器里、没有真正分组 | `TodoList` 支持 `blocked`；`Timeline` 记录时间线；按 lane 分组并在组头显示进度；「下一步」取优先级前 3 条 |
+| 显示不够优雅 | 没有进度可视化、详情堆文本、状态既填行底色又加 Pill（双重编码） | 新增 `Progress` / `KeyValue` / `Timeline`；详情改字段表；明细表精简列并右对齐数字列 |
+
+**套件 v1.1（加性，符合 §8.1 只加不减）**：
+
+- 新增 `Progress`（`value` / `max` / `tone` / `label` / `showValue` / `size`）。
+- 新增 `KeyValue`（`items[{label,value,tone?}]` / `columns` / `dense`）。
+- 新增 `Timeline`（`events[{id,at,title,tone?,detail?,ref?}]` / `dense`）。
+- `TodoList` 的 `status` 增加 `blocked`（危险色 + `!` 字形）。
+- `KIT_VERSION`：`k1` -> `k2`（套件版本参与模块 URL 哈希，所有画布自动重编译）。
+- 同步：`INTERFACE.md` §5、`skills/canvas/references/kit.md`、`patterns.md` 看板范式、`examples/selfcheck.canvas.tsx`（仍然覆盖全部套件面）。
+
+**测试**：新增 `test/board.test.mjs`——它编译 board 模板、用**真实套件**（`lib/client.js` + React stub）递归渲染整棵树，并断言派生分析的结果（加权进度 40%、两条阻塞、两条陈旧）。`test/templates.test.mjs` 增加 board 行字段表守卫；`test/client.test.mjs` 的套件面清单补三个新组件。`canvas_check` 只验证编译，这个测试补上了渲染那条缝。
+
+**本次审计发现、但不在本次改动范围（待裁决）**：
+
+1. **`canvas_state_merge` 未实现**：README / INTERFACE / SKILL / patterns 都把它列为第四个模型工具，`index.js` 只注册了 `canvas_check` / `canvas_new` / `canvas_read` 三个。副作用是「人的改动固化回源文件」这一步目前只能由 agent 手动改 DATA。
+2. **`runCommand` 未实现**：`/canvas/api` 的 `actions` 与 gates 模板都按「白名单内可执行」写，host 对所有请求一律回 `{ ok:false, code:'unsupported' }`（P3 未做）。
+3. **`startTurn` 冷却顺序**：先写 cooldown 再调 `sessionController.prompt`，失败也会占满 `startTurnCooldownMs` 窗口。
+4. **`canvas_read` 标量 dataPath**：`dataPath` 指向非数组字段时，`mergeRows` 返回空数组并覆盖该字段，返回的 JSON 会静默丢值。
+5. **`W_MANY_ROWS` 口径**：kit.md 曾写「并报 `W_MANY_ROWS`」，与 §21 D5 的裁决矛盾，本次已按裁决改为「渲染期文案，不产出编译诊断」。
+
+---
+
+## 23. 修订记录（续，2026-09-28：把审计项做完）
+
+§22 列出的 5 条待裁决项，本轮全部落地：
+
+| # | 项目 | 落地 |
+|---|---|---|
+| 1 | `canvas_state_merge` 未实现 | 新增 `host/merge.js`：先把 `literal.js` 的解析器改成带跨度的 `parseValueSpanned`（`parseValue` 变为它的薄包装），再按**字段值跨度**最小替换；`DATA` 里没有的字段插到最后一项之后，其余字节完全不动。新增 `removeOverlayEntries` 清掉已合并的 sidecar 条目；新增诊断码 `E_MERGE`。模型工具 3 → 4 |
+| 2 | `runCommand` 未实现 | 经 `ctx.shell`（`resolve` → `execute` → `result`）执行；命令字符串**只取自** Config 白名单项，请求只能按 `id` / 完整命令选中；沙箱策略取 `ctx.sandboxPolicy.resolve({ session })`。返回真实 `exitCode` / `timedOut` / 输出尾部 |
+| 3 | `startTurn` 冷却顺序 | 仍先写 cooldown（防连点），失败时 `delete`，不再让一次失败占满 30s 窗口 |
+| 4 | `canvas_read` 标量 `dataPath` | 只在 `Array.isArray(value[key])` 时合并；标量键原样返回，不再被 `[]` 覆盖。`key === null` 的全量合并分支改为显式条件 |
+| 5 | `W_MANY_ROWS` 口径 | troubleshooting / kit.md 已与 §21 D5 对齐 |
+
+**文档同步**：`INTERFACE.md` 新增 §4.1（`runCommand` 结果形状与安全边界）；`kit.md` 的 `ActionResult` 扩成真实返回面、动作表更新；`troubleshooting.md` 新增 `E_MERGE` 一节并修掉 `E_REACT_IMPORT` 的死引用；gates 模板改为用 `exitCode` 区分「动作成功」与「门禁通过」。
+
+**测试**：`test/merge.test.mjs`（9，含「未触碰的字节完全一致」与合并后 DATA 重新解析）；`test/tools.test.mjs` 增加 `canvas_state_merge` 的端到端（含 `dryRun` 不写盘）；`test/serve.test.mjs` 增加第二套组合（假 `ctx.shell` + `sandboxPolicy`）验证白名单执行、未登记拒绝、以及「请求里的 `command` 不能覆盖白名单」。全量 64 断言 / 7 个测试文件全绿。
+
+> 仍未闭环：`runCommand` 的 `ctx.shell` 集成只在假执行器上验证过，未在真实 GUI 里跑过一条命令；`canvas_state_merge` 只覆盖「已存在字段 + 新增字段」两条路径，没有处理引号风格重写与注释保留以外的排版细节（它本来也不该动那些）。
+
+---
+
+## 24. 修订记录（续：画布意图入口）
+
+补上一直缺的一环：**用户要画布时的意图识别与 intake 入口**。
+
+- **事件面**：`agent/pre-step`（`dsh-agent` 声明的水位事件）。监听器先 `next()`，只在 `{ kind: 'enter' }` 上把消息折进批次末尾——与 `dsh-hooks-claude-code` 的 `UserPromptSubmit` 同一形状，因此后续监听器仍可拒绝或改写。
+- **`host/intent.js`**：
+  - `matchesCanvasIntent`：强名词（看板 / 画布 / 画板 / 仪表盘 / dashboard / kanban）直接命中；弱名词（canvas / board / 项目文档 / 工程现状 / 审计报告 …）需搭配创建动词；Config 的 `intentKeywords` 按弱名词处理。『the canvas plugin tests failed』这类顺带提到不会触发。
+  - `userPlainText`：只读 `source.kind === 'user'` 的消息，别的插件注入的上下文不会二次触发。
+  - `buildCanvasIntakeGuidance`：自包含的 intake（7 条对齐问题 + 产出顺序 + 质量门槛 + 指向 references/intake.md）。入口必须在第一轮就可用，不能依赖一次工具调用。
+  - `createCanvasIntentListener`：`{ getCreateUserMessage, keywords, guide, onError }`；工厂缺席、guide 抛错都放行。
+- **`index.js`**：`registerIntentHook` 用 `ctx.effect(() => ctx.on('agent/pre-step', listener))` 注册；`@deepseek-ai/dsh-llm` 的消息工厂**懒加载**，缺了只警告一次，不影响插件加载。新增配置 `intentHook`（默认 true）/ `intentKeywords` / `intentGuide`。
+- **技能**：新增 `skills/canvas/references/intake.md`（触发含义、7 条 intake 表、字段清单与缺失后果、回执模板、产出顺序、质量门槛、反模式）；`SKILL.md` 的流程补第 0 步并更新 frontmatter description；README 增加「画布意图入口」一节与三条配置。
+
+**测试**：`test/intent.test.mjs` 13 条（强 / 弱名词、英文、部署关键词、只读人类消息、回执内容、恰好追加一条，以及不匹配 / 拒绝 / 空批次 / 工厂缺席 / 自身出错五条放行路径）；`test/serve.test.mjs` 的 ctx shim 记录 `ctx.on`，断言入口确实注册在 `agent/pre-step`。
+
+> 未闭环：这条只在事件契约层验证过（shim + 单测），**没有在真实会话里观察过注入效果** —— 下一次真实 GUI 会话里发一句「给我建个项目看板」即可确认。
+
+---
+
+## 25. 修订记录（续：画布 tab 的滚动容器）
+
+**Bug**（真实会话反馈）：右栏画布内容超出面板后没有滚动条，看不到全部。
+
+**根因**：`SidebarRight` 的 tab 容器是 `.tabBody{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden}` —— 它**裁剪**。随包发布的文件页之所以能滚，是因为它自己带滚动容器（`.root{height:100%;min-height:0;flex:auto;display:flex}` + `.body{flex:auto;min-height:0;overflow:auto}`）。`CanvasBody` 的根 `Stack` 只有 `display:flex` 与 `gap`，没有高度也没有 overflow，于是内容长出容器后被裁掉：没有滚动条，也够不到下面。
+
+**修复**：`lib/client.js` 的 `CanvasBody` 统一走 `FRAME_STYLE`（`height:100%` / `minHeight:0` / `flex:auto` / `overflowY:auto` / `overflowX:hidden` / `scrollbarGutter:stable`），**两条 return**（目录页与画布页）都套上。
+
+**回归**：`test/client.test.mjs` 新增「the canvas body owns a scroll container」，对两条渲染路径都断言上面四个样式，避免以后有人顺手把根 `Stack` 的 `style` 去掉。
+
+> 副作用（正向）：根容器成了真正的滚动容器后，`Table` 的 `stickyHeader` 有了正确的 sticky 参照；`scrollbar-gutter: stable` 让有无滚动条时布局不跳。
+> 生效仍需刷新 / 重启 GUI：运行中的页面在改动前就组合好了模块图。
+
+---
+
+## 26. 修订记录（续：画布面板的边距与排版）
+
+**反馈**：画布没有页面边距，上下左右都很挤；字体没有参照 harness 标准，有大有小、混乱。
+
+**根因（都是 token 用错，不是审美问题）**：
+
+1. **边距**：`FRAME_STYLE` 只留了 `paddingRight: 4px`（给滚动条让位），而 tab 容器 `.tabBody` 本身没有 padding —— 内容贴边。
+2. **排版**：
+   - `--dsw-font-mono` 在主题里**不存在**，裸 `var()` 是无效字族 → `Code` 一直用 UI 字体渲染，代码不是等宽。
+   - `fontSmall` / `fontCaption` 引用的是**简写** token（`--dsw-font-xs-13` = `13px/20px family`、`--dsw-font-xxs-12`）。把它们当 `font-size` 是无效值，于是 12 / 13px 静默退回继承字号 —— `small` 与 `caption` 实际和正文一样大。
+   - `H1` / `H2` / `Stat` 用 `calc(--dsh-content-font-size * 1.6 / 1.22 / 1.5)` 这类自造乘法，得到 22.4 / 17 / 21px：既不在 harness 刻度上，彼此也没有统一的基线。
+   - 基线本身也选错了：右栏正文是 `--dsh-content-font-size-secondary`（13px），不是聊天区的 14px。
+
+**修复**（`lib/client.js`）：
+
+- `T.mono` → `--ds-font-family-code, ui-monospace, …`（与 markdown code 同一个 token）。
+- 新增长写 token：`base / small / caption / large` 的 `-font-size` 与 `-line-height`；`H1` = `--dsw-font-l-20`，`H2` = `--dsw-font-base-strong-16`，code = `--dsw-font-markdown-code`。
+- `font(size)` 只从刻度取；新增 `lineOf(size)`，字号与行高成对出现（去掉 `lineHeight: 1.6` 这类裸值）。
+- 全部组件（Text / H1 / H2 / Code / CardHeader / Callout / Stat / KeyValue / Timeline / Button / Pill / Table / BarChart / TodoList / DiagnosticsCard）改走 token；表头字重 500（对齐 markdown table head 的 500），BarChart 的 10px 轴标签上到 11px。
+- `FRAME_STYLE` 加 `padding: "12px 16px 24px"`。
+
+**文档**：`kit.md` 新增「排版标准」表，设计约定从四条加到五条（第 5 条：字号只从刻度取）。
+
+**回归**：`test/client.test.mjs` 新增「typography comes from the harness scale」，断言各档的 `-font-size` 长写 token、`H1/H2` 的刻度、`--ds-font-family-code`，并显式禁止 `--dsw-font-mono`；滚动测试补上 `padding` 断言。
+
+> 同一条教训，第三次：**契约要靠 token 的**长写形式**落地**。简写 token 贴进 `font-size` 不报错、不告警，只是安静地不生效。
+
+---
+
+## 27. 修订记录（续：startTurn 的真实请求形状）
+
+**反馈**：画布上的「开始 / 在会话里开始」点了没反应，任务不会开始。
+
+**根因**（两个 API 形状错误，叠加成「按钮坏了」）：
+
+1. `SessionController.prompt(request, signal)` 的实现**第一行**就是 `signal.throwIfAborted()`。我们只传了一个参数 → `TypeError: Cannot read properties of undefined (reading 'throwIfAborted')`。它落进 `startTurn` 的 catch，变成 `{ ok:false, code:"failed" }`，看起来像「被拒」，实际是崩了。
+2. `SessionPromptRequest.mode` 是**必填**字段（`'queue' | 'steer'`），我们没传。
+
+这正是 §21「尚未闭环」里那条「按源码推断、未经真实 agent 验证」的欠账。
+
+**修复**（`index.js`）：请求按契约补齐 `requestId` / `sessionId` / `mode: "queue"` / `content`，并显式传一个 `AbortController` 的 signal（它只界定 prompt 的准入，轮次本身要活过 HTTP 响应）。
+
+**可见性**（`lib/client.js`）：`reportFailure` 扩成 `reportOutcome` —— 失败仍弹 danger，**成功也弹一条 info**（「已交给 agent；切到会话即可看到这一轮」）。静默的成功与坏按钮在体感上没有区别。
+
+**回归**：`test/serve.test.mjs` 新增两条 —— `mode === "queue"`、传入了真正的 `AbortSignal`、`content[0].text` 原样、`requestId` 存在；以及冷却窗口内重复点击**不会**触达 agent。`test/client.test.mjs` 新增一条：成功的 `startTurn` 必须产生一条 info 通知。
+
+> 教训：**跨包契约要对着类型与实现的第一个语句一起读**。`prompt` 的类型把 signal 标成可选，实现却在第一行解引用它 —— 只看类型照样会踩。
+
+---
+
+## 28. 修订记录（续：action 信封）
+
+**反馈**：点「开始」后提示 `startTurn: unsupported action undefined`。
+
+**根因**：客户端与 host 对 `POST /canvas/action` 的 body 形状不一致。
+
+- INTERFACE §3 冻结的是 `{ canvas, sessionId?, action }`，host 也确实按 `body.action` 读。
+- 但 `lib/client.js` 的 `postAction` 把 action **平铺**进 body：`Object.assign({ canvas, sessionId, root }, action)`。
+- 于是 host 拿到 `body.action === undefined` → `action = {}` → `"unsupported action undefined"`。
+
+**为什么测试没抓到**：`test/serve.test.mjs` 一直手写「包装形状」的 body（`{ canvas, action: {...} }`），而 `test/client.test.mjs` 从不检查请求体。两个半边各自自洽，接缝没人测 —— 与 §21 补充 2 的「测试与代码同错」是同一类。
+
+**修复**：
+
+- 客户端按契约包装：`{ canvas, sessionId, root, action }`。
+- host 增加**兼容分支**：`body.action` 缺失时退化为 body 本身，让「页面还挂着旧 bundle、只重载了 host」的中间态也能工作；缺 `type` 时的消息改成点名信封形状与收到的 keys。
+- 影响面：`startTurn` / `runCommand` / `overlaySet` / `overlayClear` 四条 host 侧动作**此前全部不可用** —— 「人点面板改状态落 sidecar」这条承诺在真实页面里从未成立过，§21 把它标为已验证只是 host 单边测试的结论。
+
+**回归**：
+
+- `test/client.test.mjs`：直接 stub `fetch` 抓请求体，断言它是 `{ canvas, sessionId, action: { type, ... } }`。
+- `test/serve.test.mjs`：新增「扁平形状仍可用」（兼容分支）与「缺 type 时消息点名信封」两条。
+
+> 教训第四次同源：**接缝要有测试**。两个半边各自自洽不等于它们对上；这次是「客户端不检查自己发的形状，服务端测试手写形状」。
+
+---
+
+## 29. 修订记录（续：runCommand 真机验收 + 意图入口噪音）
+
+**V-03 闭环**（此前一直挂在「需要先在 Config 登记 commandWhitelist 项」）：
+
+- 白名单登记在 **profile 的 `cordis.patch.yml`**（用户 patch 层，`patchReload: live`），新增 `gate:tests`（`node --test test/*.test.mjs`）与 `gate:templates`（`node --test test/templates.test.mjs`），`cwd` 写死为本仓绝对路径，避免依赖调用方 Session 的工作区根。
+- 真机验收（直接打运行中的 host）：`POST /canvas/action { sessionId, action:{type:"runCommand", id:"gate:templates"} }` → `ok=true, code="ran", exitCode=0, mode="danger-full-access", denied=false`，stdout 是模板语料的真实输出；`gate:tests` → `exitCode=0`，8 文件全过。
+- 新增 `gates.canvas.tsx`（本仓真实门禁画布），面板上的 Run 现在真的会执行。
+
+**首次尝试暴露的兜底问题**（记为 V-05，未决）：不带 `sessionId` 时 `runCommand` 用 `sandboxPolicy.resolve()` 的部署默认 —— 模式 `workspace-write` + 回落根 `D:\source\repos\AIEngineering`，Windows ACL runner 在该目录上 `SetNamedSecurityInfoW` 失败（Win32 5），执行器拒绝在无约束下运行。面板总会带 `sessionId`，所以不影响按钮；但「没有 Session 时该怎么办」需要一条明确裁决（拒绝执行 / 显式回落），并写进 INTERFACE §4.1。
+
+**意图入口噪音**：点「开始」提交的任务带 `source.rpcId = "canvas-…"`，而 prompt 里含「画布」，于是 intake 指引被再次注入 —— 一个已经跟踪的任务被要求重新做 intake。修复：`userPlainText` 跳过 `rpcId` 以 `canvas-` 开头的消息（`startTurn` 铸的 id）。文本是自由格式，`rpcId` 才是可靠信号。回归：`test/intent.test.mjs` +2。
+
+
+
+
+
+
+
+

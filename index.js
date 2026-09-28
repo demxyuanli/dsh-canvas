@@ -11,8 +11,11 @@ import { fileURLToPath } from "node:url";
 
 import { compileCanvas, moduleUrl, DEFAULT_LIMITS, ROUTE_PREFIX } from "./host/compile.js";
 import { ModuleStore } from "./host/store.js";
-import { readOverlay, writeOverlay, overlayPathFor, sha1, mergeRows } from "./host/overlay.js";
+import { readOverlay, writeOverlay, overlayPathFor, sha1, mergeRows, removeOverlayEntries } from "./host/overlay.js";
 import { discoverCanvases, readMetadata } from "./host/discovery.js";
+import { mergeOverlaysIntoSource } from "./host/merge.js";
+import { createCanvasIntentListener } from "./host/intent.js";
+import { mk } from "./host/diagnostics.js";
 
 export const name = "canvas";
 
@@ -35,6 +38,9 @@ function resolveConfig(raw) {
     startTurnCooldownMs: numberOr(c.startTurnCooldownMs, 30000),
     workspaceRoot: typeof c.workspaceRoot === "string" ? c.workspaceRoot : null,
     maxListDepth: numberOr(c.maxListDepth, 6),
+    intentHook: c.intentHook === undefined ? true : c.intentHook === true,
+    intentKeywords: Array.isArray(c.intentKeywords) ? c.intentKeywords.filter((keyword) => typeof keyword === "string" && keyword !== "") : [],
+    intentGuide: typeof c.intentGuide === "string" && c.intentGuide !== "" ? c.intentGuide : null,
   };
 }
 
@@ -233,7 +239,19 @@ function createHandler(ctx, state) {
 
   async function handleAction(req, res) {
     const body = JSON.parse(await readBody(req, 64 * 1024));
-    const action = body.action || {};
+    // The frozen shape is { canvas, sessionId?, root?, action }. A client that
+    // spread the action flat into the body used to read here as "unsupported
+    // action undefined"; accept that shape too, so a page already loaded with
+    // the old bundle keeps working across a host-only reload.
+    const action = body !== null && typeof body === "object" && body.action !== null && typeof body.action === "object" ? body.action : body;
+    if (action === null || typeof action !== "object" || typeof action.type !== "string" || action.type === "") {
+      sendJson(res, 200, {
+        ok: false,
+        code: "unsupported",
+        message: "an action body must be { action: { type } }; received keys: " + Object.keys(body === null || typeof body !== "object" ? {} : body).join(", "),
+      });
+      return;
+    }
     if (action.type === "overlaySet" || action.type === "overlayClear") {
       const abs = resolvePath(requestRoot(state, null, body), body.canvas);
       if (abs === null) { sendJson(res, 200, { ok: false, code: "unsupported", message: "canvas is required" }); return; }
@@ -258,13 +276,7 @@ function createHandler(ctx, state) {
       return;
     }
     if (action.type === "runCommand") {
-      sendJson(res, 200, {
-        ok: false,
-        code: "unsupported",
-        message: state.config.commandWhitelist.length === 0
-          ? "runCommand has no whitelisted commands in this profile"
-          : "runCommand is not implemented yet; use the agent's own tools",
-      });
+      sendJson(res, 200, await runCommand(ctx, state, body, action));
       return;
     }
     sendJson(res, 200, { ok: false, code: "unsupported", message: "unsupported action " + String(action.type) });
@@ -304,8 +316,13 @@ function createHandler(ctx, state) {
 
 /**
  * Hand a canvas request back to the agent as a real user turn.
- * Wrapped because the prompt request shape is the one integration this plugin
- * cannot verify without a live agent; a mismatch degrades into a clean failure.
+ *
+ * The request shape is the contract of `SessionController.prompt`: `mode` is a
+ * required field, and the method dereferences its AbortSignal before doing
+ * anything (`signal.throwIfAborted()`), so the signal is not optional in
+ * practice even where the client wrapper marks it so. Both omissions once made
+ * every "Start in chat" click land in the catch below as
+ * `{ ok:false, code:"failed" }` - a thrown TypeError, not a refusal.
  */
 async function startTurn(ctx, state, body, action) {
   const prompt = String(action.prompt === undefined ? "" : action.prompt).trim();
@@ -327,10 +344,113 @@ async function startTurn(ctx, state, body, action) {
   }
   state.cooldown.set(key, now);
   const requestId = "canvas-" + now.toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  // A fresh controller: this signal bounds prompt admission only, and the turn
+  // itself has to outlive the HTTP response.
+  const abort = new AbortController();
   try {
-    await controller.prompt({ sessionId: sessionId, content: [{ type: "text", text: prompt }], requestId: requestId });
+    await controller.prompt({
+      requestId: requestId,
+      sessionId: sessionId,
+      mode: "queue",
+      content: [{ type: "text", text: prompt }],
+    }, abort.signal);
     console.log("[dsh-canvas] startTurn accepted session=" + sessionId + " canvas=" + String(body.canvas) + " requestId=" + requestId);
     return { ok: true, detail: "queued" };
+  } catch (error) {
+    // A failed hand-off must not consume the dedupe window: the cooldown is
+    // set before the call so a double click cannot queue twice, and released
+    // here so a genuine failure stays retryable.
+    state.cooldown.delete(key);
+    return { ok: false, code: "failed", message: String(error && error.message ? error.message : error) };
+  }
+}
+
+/** Resolve a Session object for policy lookups; undefined when no accessor knows it. */
+function sessionById(ctx, sessionId) {
+  if (typeof sessionId !== "string" || sessionId === "") return undefined;
+  for (const name of ["sessions", "sessionManager", "agents", "sessionController"]) {
+    const service = serviceOf(ctx, name);
+    if (service === undefined || service === null) continue;
+    for (const method of ["get", "find", "resolve", "byId"]) {
+      if (typeof service[method] !== "function") continue;
+      try {
+        const session = service[method](sessionId);
+        if (session !== undefined && session !== null) return session;
+      } catch (error) { /* not this accessor */ }
+    }
+  }
+  return undefined;
+}
+
+/** Bounded output tail: an action response crosses to the browser. */
+function tail(text, limit) {
+  const value = String(text === undefined || text === null ? "" : text);
+  return value.length <= limit ? value : value.slice(value.length - limit);
+}
+
+/**
+ * Run one whitelisted command through ctx.shell.
+ *
+ * Security shape: a request may only SELECT a config entry - the command string
+ * always comes from commandWhitelist, never from the canvas. Confinement comes
+ * from ctx.sandboxPolicy for the calling Session, so a read-only session runs a
+ * gate read-only rather than skipping the check.
+ * @returns the action result the browser renders: exit code plus a bounded tail.
+ */
+async function runCommand(ctx, state, body, action) {
+  const whitelist = state.config.commandWhitelist;
+  if (whitelist.length === 0) {
+    return { ok: false, code: "unsupported", message: "runCommand has no whitelisted commands in this profile" };
+  }
+  const wantedId = typeof action.id === "string" && action.id !== "" ? action.id : null;
+  const wantedCommand = typeof action.command === "string" && action.command !== "" ? action.command : null;
+  const entry = whitelist.find((item) => item !== null && typeof item === "object" &&
+    ((wantedId !== null && item.id === wantedId) || (wantedCommand !== null && item.command === wantedCommand)));
+  if (entry === undefined) {
+    return {
+      ok: false,
+      code: "denied",
+      message: wantedId !== null
+        ? "no commandWhitelist entry has id " + JSON.stringify(wantedId)
+        : "that exact command is not in commandWhitelist",
+    };
+  }
+  if (typeof entry.command !== "string" || entry.command.trim() === "") {
+    return { ok: false, code: "denied", message: "the matched whitelist entry has no command string" };
+  }
+  const shell = serviceOf(ctx, "shell");
+  if (shell === undefined || shell === null || typeof shell.resolve !== "function" || typeof shell.execute !== "function") {
+    return { ok: false, code: "unsupported", message: "ctx.shell is not available in this composition" };
+  }
+  const sessionId = typeof body.sessionId === "string" && body.sessionId !== "" ? body.sessionId : (typeof action.sessionId === "string" ? action.sessionId : "");
+  let sandboxPolicy;
+  try {
+    const policy = serviceOf(ctx, "sandboxPolicy");
+    if (policy !== undefined && policy !== null && typeof policy.resolve === "function") {
+      const session = sessionById(ctx, sessionId);
+      sandboxPolicy = session === undefined ? policy.resolve() : policy.resolve({ session: session });
+    }
+  } catch (error) {
+    sandboxPolicy = undefined;
+  }
+  const workdir = typeof entry.cwd === "string" && entry.cwd !== "" ? entry.cwd : requestRoot(state, null, body);
+  const timeoutMs = numberOr(entry.timeoutMs, 120000);
+  try {
+    const spec = shell.resolve({ command: entry.command, workdir: workdir, timeoutMs: timeoutMs, sandboxPolicy: sandboxPolicy });
+    const execution = await shell.execute(spec);
+    const result = await execution.result();
+    const label = typeof entry.title === "string" && entry.title !== "" ? entry.title : (entry.id === undefined ? entry.command : entry.id);
+    return {
+      ok: true,
+      code: "ran",
+      exitCode: result.exitCode,
+      signal: result.signal === undefined ? null : result.signal,
+      timedOut: result.timedOut === true,
+      sandbox: result.sandbox,
+      detail: label + " exit=" + String(result.exitCode) + (result.timedOut === true ? " (timed out)" : ""),
+      stdout: tail(result.stdout === undefined ? "" : result.stdout.text, 8000),
+      stderr: tail(result.stderr === undefined ? "" : result.stderr.text, 4000),
+    };
   } catch (error) {
     return { ok: false, code: "failed", message: String(error && error.message ? error.message : error) };
   }
@@ -523,14 +643,16 @@ export function toolDefinitions(state) {
       let stale = false;
       let orphans = [];
       const key = typeof args.dataPath === "string" ? args.dataPath : null;
-      if (value !== undefined && key !== null) {
+      // Merge only array buckets. A scalar dataPath (e.g. "goal") must survive
+      // the read unchanged: mergeRows would otherwise replace it with [].
+      if (value !== undefined && key !== null && Array.isArray(value[key])) {
         const bucket = doc.overlays[key];
         const merged = mergeRows(value[key], bucket, sha1(source), doc.sourceSha1);
         value = Object.assign({}, value);
         value[key] = merged.items;
         stale = merged.stale;
         orphans = merged.orphanIds;
-      } else if (value !== undefined) {
+      } else if (value !== undefined && key === null) {
         for (const k of Object.keys(doc.overlays)) {
           if (Array.isArray(value[k])) {
             const merged = mergeRows(value[k], doc.overlays[k], sha1(source), doc.sourceSha1);
@@ -579,7 +701,136 @@ export function toolDefinitions(state) {
       };
     },
   },
+
+  {
+    name: "canvas_state_merge",
+    description: "Write the human sidecar edits back into a canvas's inline DATA with minimal field replacement, then clear the merged entries. Use it when the human's decisions on a board should become source truth.",
+    parameters: {
+      path: { type: "string", required: true, description: "Canvas path, absolute or relative to the workspace root." },
+      key: { type: "string", description: "Only merge this DATA array key, for example tasks." },
+      ids: { type: "array", items: { type: "string" }, description: "Only merge these row ids." },
+      dryRun: { type: "boolean", description: "Report what would change without writing the file or the sidecar." },
+    },
+    output: {
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          ok: { type: "boolean", required: true },
+          summary: { type: "string", required: true },
+          path: { type: "string", required: true },
+          applied: {
+            type: "array",
+            required: true,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                key: { type: "string", required: true },
+                id: { type: "string", required: true },
+                fields: { type: "array", required: true, items: { type: "string" } },
+              },
+            },
+          },
+          skipped: {
+            type: "array",
+            required: true,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                key: { type: "string", required: true },
+                id: { type: "string" },
+                reason: { type: "string", required: true },
+              },
+            },
+          },
+          diagnostics: { type: "array", required: true, items: DIAGNOSTIC_ITEM_SCHEMA },
+        },
+      },
+      render: function (args, value) {
+        const lines = value.applied.map(function (a) { return "merge " + a.key + "/" + a.id + " -> " + a.fields.join(", "); });
+        const skipped = value.skipped.map(function (s) { return "skip " + s.key + (s.id === undefined ? "" : "/" + s.id) + ": " + s.reason; });
+        const body = lines.concat(skipped);
+        return [{ type: "text", text: value.summary + (body.length === 0 ? "" : "\n" + body.join("\n")) }];
+      },
+    },
+    presentCall: function (args) { return { card: "generic", title: "Merge canvas state", kind: "other", rawInput: args.path }; },
+    async execute(args, exec) {
+      const abs = resolvePath(toolRoot(state, exec), args.path);
+      const source = await fs.readFile(abs, "utf8");
+      const doc = await readOverlay(abs);
+      const merged = mergeOverlaysIntoSource(source, doc, { key: args.key, ids: args.ids });
+      const diagnostics = [];
+      if (!merged.ok) {
+        diagnostics.push(mk("E_MERGE", "canvas_state_merge could not read export const DATA: " + merged.reason, {}));
+        return { ok: false, summary: "merge failed for " + abs + ": " + merged.reason, path: abs, applied: [], skipped: merged.skipped, diagnostics: diagnostics };
+      }
+      let compiled = null;
+      if (merged.changed && args.dryRun !== true) {
+        await fs.writeFile(abs, merged.source, "utf8");
+        await removeOverlayEntries(abs, merged.applied);
+        compiled = compileCanvas({ path: abs, source: merged.source, limits: state.config.limits });
+        for (const d of compiled.diagnostics) diagnostics.push(d);
+      }
+      const prefix = args.dryRun === true ? "would merge " : "merged ";
+      const summary = merged.applied.length === 0
+        ? "nothing to merge into " + abs
+        : prefix + merged.applied.length + " row(s) into " + abs + (compiled === null || compiled.ok ? "" : " (the canvas now has diagnostics)");
+      return {
+        ok: compiled === null ? true : compiled.ok === true,
+        summary: summary,
+        path: abs,
+        applied: merged.applied,
+        skipped: merged.skipped,
+        diagnostics: diagnostics,
+      };
+    },
+  },
   ];
+}
+
+/**
+ * Register the canvas-intent entry on the agent step waterfall.
+ *
+ * Registered eagerly, but the message factory is resolved lazily: a composition
+ * without @deepseek-ai/dsh-llm must still load this plugin, and a deployment
+ * that turns the hook off must pay nothing.
+ * @param ctx - host context.
+ * @param config - resolved plugin config.
+ */
+function registerIntentHook(ctx, config) {
+  if (config.intentHook !== true || typeof ctx.on !== "function") return;
+  let factoryPromise = null;
+  function getCreateUserMessage() {
+    if (factoryPromise === null) {
+      factoryPromise = import("@deepseek-ai/dsh-llm").then(
+        function (llm) { return typeof llm.createUserMessage === "function" ? llm.createUserMessage : null; },
+        function () { return null; },
+      );
+    }
+    return factoryPromise;
+  }
+  ctx.effect(function () {
+    let warned = false;
+    const guide = config.intentGuide === null
+      ? undefined
+      : function (match) {
+          const signals = match !== null && Array.isArray(match.signals) && match.signals.length > 0 ? match.signals.slice(0, 4).join(" / ") : "";
+          return config.intentGuide + (signals === "" ? "" : "\n\n（识别到的信号：" + signals + "）");
+        };
+    const listener = createCanvasIntentListener({
+      getCreateUserMessage: getCreateUserMessage,
+      keywords: config.intentKeywords,
+      guide: guide,
+      onError: function (error) {
+        if (warned) return;
+        warned = true;
+        console.warn("[dsh-canvas] intent hook failed: " + String(error && error.message ? error.message : error));
+      },
+    });
+    return ctx.on("agent/pre-step", listener);
+  }, "canvas: intent hook");
 }
 
 // --------------------------------------------------------------------- entry
@@ -593,6 +844,8 @@ export function apply(ctx, rawConfig) {
     cooldown: new Map(),
   };
   const handler = createHandler(ctx, state);
+
+  registerIntentHook(ctx, config);
 
   ctx.inject(["webServer"], function (webCtx) {
     webCtx.effect(function () {

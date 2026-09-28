@@ -61,12 +61,30 @@ host 用 `webServer.register({ kind: "prefix", path: "/canvas", handler })` 注�
 
 未来动作：`{ type: "startTurn" }` 之外的编排动作一律先在此登记再实现。
 
+### 4.1 `runCommand` 的结果形状
+
+进程跑完即算**动作成功**，与命令自己的退出码无关：
+
+~~~ts
+{ ok: true, code: "ran", exitCode: number | null, signal: string | null, timedOut: boolean,
+  sandbox?: { mode, denied, enforcement?, runnerFailed? }, detail: string,
+  stdout: string, stderr: string }   // stdout / stderr 是截断后的尾部（8 KB / 4 KB）
+~~~
+
+- 命令字符串**永远取自 Config 白名单项**；请求只能按 `id` 或完整命令逐字**选中**一项，不能改写它（请求里同时带 `id` 与不相干的 `command` 时以命中项为准）。
+- 执行经 `ctx.shell`（`resolve` → `execute` → `result`），并按调用 Session 的 `ctx.sandboxPolicy.resolve({ session })` 得到的策略做沙箱约束；取不到 Session 时用部署默认策略。
+- 未登记 → `{ ok:false, code:"denied" }`；白名单为空 → `{ ok:false, code:"unsupported" }`；`ctx.shell` 缺失 → `{ ok:false, code:"unsupported" }`；准备 / 启动失败 → `{ ok:false, code:"failed" }`。
+
 ## 5. 套件（`dsh/canvas`）导出面
 
-组件：`Stack Row Grid Divider CollapsibleSection H1 H2 Text Code Card CardHeader CardBody Callout Stat Table BarChart TodoList Button Pill`
+组件：`Stack Row Grid Divider CollapsibleSection H1 H2 Text Code Card CardHeader CardBody Callout Stat Table BarChart TodoList Progress KeyValue Timeline Button Pill`
 钩子：`useState useEffect useMemo useCallback useRef useCanvasState useCanvasOverlay useCanvasAction useHostTheme useCanvasResource`
 
-props 细节见设计文档 §8。**只加不减**：新增组件/可选 prop 允许；改签名或删导出必须升级 `version` 并在诊断里报 `W_DEPRECATED`。
+`TodoList` 的 `status` 取 `pending | in_progress | blocked | completed | cancelled`。
+
+props 细节见设计文档 §8。**只加不减**：新增组件/可选 prop 允许；改签名或删导出必须升级 `version`，并在 client 渲染期报 `W_DEPRECATED`（**不是编译诊断**）。
+
+v1.1 加性新增 `Progress` / `KeyValue` / `Timeline` 与 `TodoList` 的 `blocked`；`KIT_VERSION` 已 `k1 → k2`，所有画布模块 URL 随之失效并重编译。
 
 ## 6. 文件约定
 
