@@ -36,7 +36,18 @@
 
 ![套件全貌](docs/preview/selfcheck.png)
 
-> 截图宽度取 720px 并做了 2x 缩放（右栏可拉宽，也有全屏模式）；主题为 harness 的浅色 token。
+> 截图宽度取 720px 并做了 2x 缩放（右栏可拉宽，也有全屏模式）。深色变体没有单独的 CSS：harness 用 `body[data-ds-dark-theme]` 在同一批主题表里切换整套 token，脚本用 `THEME=dark` 生成。
+
+<details>
+<summary>深色主题变体（同样三张）</summary>
+
+![项目看板 · 深色](docs/preview/board-dark.png)
+
+![门禁看板 · 深色](docs/preview/gates-dark.png)
+
+![套件全貌 · 深色](docs/preview/selfcheck-dark.png)
+
+</details>
 
 ## 画布意图入口（host hook）
 

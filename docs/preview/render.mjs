@@ -28,6 +28,12 @@ const ROOT = path.resolve(HERE, "..", "..");
 
 /** Panel width in CSS px; the right sidebar is resizable and has a fullscreen mode. */
 const WIDTH = Number(process.env.PREVIEW_WIDTH || 720);
+/**
+ * The harness flips its whole token set with `body[data-ds-dark-theme]`, and both
+ * palettes live in the same theme sheets, so the dark variant needs no separate
+ * CSS - only the attribute (plus `color-scheme` so scrollbars/controls follow).
+ */
+const DARK = (process.env.THEME || "light") === "dark";
 const CSS_LITERAL = /=\s*"((?:[^"\\]|\\.)*)"/g;
 const UNITLESS = new Set(["flex", "flexGrow", "flexShrink", "opacity", "fontWeight", "zIndex", "lineHeight", "order", "gridColumn", "gridRow", "zoom", "aspectRatio"]);
 const SVG_TAGS = new Set(["svg", "g", "rect", "line", "text", "circle", "path", "polyline", "polygon"]);
@@ -152,14 +158,16 @@ async function renderOne(kit, reference, themeCss) {
     "<title>" + esc(path.basename(abs)) + "</title>",
     "<style>",
     themeCss,
+    DARK ? "html{color-scheme:dark;}" : "",
     "html,body{margin:0;padding:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);}",
     "#panel{width:" + WIDTH + "px;box-sizing:border-box;}",
-    "</style></head><body>",
+    "</style></head>",
+    DARK ? "<body data-ds-dark-theme>" : "<body>",
     '<div id="panel">' + toHtml(kit.React.createElement(mod.default, null)) + "</div>",
     "</body></html>",
     "",
   ].join("\n");
-  const out = path.join(HERE, path.basename(abs).replace(/\.canvas\.tsx$/, "") + ".html");
+  const out = path.join(HERE, path.basename(abs).replace(/\.canvas\.tsx$/, "") + (DARK ? "-dark" : "") + ".html");
   await fs.writeFile(out, html, "utf8");
   return { out, bytes: html.length, title };
 }
