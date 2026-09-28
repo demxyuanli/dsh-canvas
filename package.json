@@ -2,7 +2,7 @@
   "name": "@local/dsh-canvas",
   "version": "0.2.0",
   "private": true,
-  "description": "Canvas for the DSH web GUI: agent-authored .canvas.tsx files compiled and rendered live, with a host UI kit, action bridge, and sidecar state",
+  "description": "DeepSeek Harness project-board plugin: agent-authored .canvas.tsx boards compiled and rendered live in the web GUI, with a host UI kit, action bridge, sidecar state, and agent-readable slices",
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs"

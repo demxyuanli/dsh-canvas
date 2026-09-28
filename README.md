@@ -1,6 +1,12 @@
-# @local/dsh-canvas
+# @local/dsh-canvas —— DeepSeek Harness 的项目看板插件
 
-> Agent 写的 `.canvas.tsx` 画布，由宿主实时编译渲染，并可反向回灌 agent。
+> **一个适配 DeepSeek Harness 的项目看板插件。** agent 把项目的审计结论与工程现状写成 `.canvas.tsx`，宿主（host 半边）实时编译并渲染到右栏，面板上的决定可以回流给 agent。
+
+- **插件形态**：DeepSeek Harness 的工作区 bundle，单包双半 —— host（Node / cordis）+ 浏览器半边（零依赖，只 `require("react")`）。
+- **看板形态**：任务跟踪 / 门禁对齐 / 迁移进度 / 方案对比。行的单位是「条目」，每条带状态、进度、日期、阻塞、下一步、验收与证据；进度、风险、「下一步」全部从 `DATA` 现算。
+- **harness 原生**：意图入口挂在 `agent/pre-step`；门禁执行走 `ctx.shell` 并按调用 Session 的 `ctx.sandboxPolicy` 约束；画布的「在会话里开始」走 `sessionController`；颜色与排版取自 harness 的 token，明暗主题自动跟随。
+- **对 agent 省 context**：`canvas_read` 只取切片（`dataPath` / `filter` / `ids` / `limit`），`canvas_state_merge` 把人的改动最小化写回源文件。
+- **可验收**：`npm test` → 8 个文件 / 94 断言；模板语料永远可编译。
 
 ## 是什么
 
