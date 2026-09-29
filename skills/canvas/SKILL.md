@@ -7,7 +7,7 @@ description: Use when the user asks for a project canvas, 看板, 画布, 画板
 
 画布是**能编译、能交互、能回灌 agent** 的产物：agent 写一个 `*.canvas.tsx` 文件，宿主实时编译并渲染成右栏 tab。面板上的按钮可以打开文件、发起新回合、跑白名单命令。
 
-画布类请求有一个 host 侧**意图入口**（`agent/pre-step` hook）：用户说"建个项目的 canvas / 看板 / 画布 / 画板 / 项目文档"时，它会把 [references/intake.md](references/intake.md) 的摘要注入当前步骤。**这句话的含义是「用画布承载审计与工程分析」**——先做 intake 对齐口径，再写文件；直接产出一个只有标题与状态的薄看板等于没接住入口。
+画布类请求有一个 host 侧**意图入口**（`agent/pre-step` hook）：用户**要建**"项目的 canvas / 看板 / 画布 / 画板 / 项目文档"时，它把 7 条 intake 问题注入当前步骤，并指向 [references/intake.md](references/intake.md)（产出顺序与质量门槛在那里）。**这句话的含义是「用画布承载审计与工程分析」**——先做 intake 对齐口径，再写文件；直接产出一个只有标题与状态的薄看板等于没接住入口。提到**既有**画布的消息（"这张看板…"、"更新 board.canvas.tsx"）不会触发。
 
 先读 [references/kit.md](references/kit.md) 拿到完整套件 API，再照 [templates/board.canvas.tsx](templates/board.canvas.tsx) 起步。
 

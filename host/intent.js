@@ -21,12 +21,35 @@ const WEAK_NOUNS = [
   "审计报告", "复查报告", "评审报告", "现状分析", "进展报告",
 ];
 
-/** Imperatives that turn a weak noun into a build request. */
-const VERBS = [
-  "建", "创建", "新建", "做", "生成", "写", "弄", "搭", "来一个", "来个", "给我", "帮我",
-  "整理", "梳理", "汇总", "编制", "列一下", "看一下",
+/**
+ * Imperatives that ask for something to be BUILT. Deliberately excludes "帮我" /
+ * "看一下" / "show me": those introduce a request for help with something that
+ * already exists, which is not this entry point.
+ */
+const CREATE_VERBS = [
+  "建", "创建", "新建", "做", "生成", "写", "弄", "搭", "来一个", "来个", "给我",
+  "整理", "梳理", "汇总", "编制", "列一个",
   "create", "make", "build", "generate", "write", "add", "draft", "set up", "give me", "produce", "put together",
 ];
+
+/** Signals that the message is talking about something that already exists. */
+const EXISTING_MARKERS = [
+  "这张", "这个", "这本", "该", "现有", "已有", "上面", "刚才", "那条", "那些",
+  "里的", "里面", "其中", "本仓", "当前", "我们的",
+];
+
+/** A path or a filename: naming one means talking about a concrete, existing file. */
+const PATH_LIKE = /[A-Za-z0-9_.-]+\/[A-Za-z0-9_./-]+|\b[A-Za-z0-9_-]+\.(?:canvas\.tsx|md|ts|tsx|json|ya?ml)\b/i;
+
+/**
+ * How far in front of a noun a creation verb may sit and still govern it.
+ *
+ * Chinese is terse - the verb butts against its object ("做个看板") - so a tight
+ * window is what keeps "一起做（…模板…本仓看板…）" out. English needs room for
+ * articles and prepositions ("create a project canvas"), hence the second value.
+ */
+const GOVERN_WINDOW = 12;
+const GOVERN_WINDOW_ASCII = 24;
 
 /**
  * Does this text ask for a canvas-shaped artifact?
@@ -35,21 +58,33 @@ const VERBS = [
  * @returns { matched, signals, hasVerb }.
  */
 export function matchesCanvasIntent(text, extraKeywords) {
-  const hay = String(text === undefined || text === null ? "" : text).toLowerCase();
-  const strong = [];
-  for (const noun of STRONG_NOUNS) if (hay.includes(noun.toLowerCase())) strong.push(noun);
-  const weak = [];
-  for (const noun of WEAK_NOUNS) if (hay.includes(noun.toLowerCase())) weak.push(noun);
-  for (const noun of Array.isArray(extraKeywords) ? extraKeywords : []) {
-    if (typeof noun !== "string" || noun === "") continue;
-    if (hay.includes(noun.toLowerCase())) weak.push(noun);
-  }
-  const hasVerb = VERBS.some((verb) => hay.includes(verb.toLowerCase()));
-  return {
-    matched: strong.length > 0 || (weak.length > 0 && hasVerb),
-    signals: strong.concat(weak),
-    hasVerb,
-  };
+  const raw = String(text === undefined || text === null ? "" : text);
+  const hay = raw.toLowerCase();
+  const lower = (list) => list.filter((noun) => typeof noun === "string" && noun !== "" && hay.includes(noun.toLowerCase()));
+  const strong = lower(STRONG_NOUNS);
+  const weak = Array.from(new Set(lower(WEAK_NOUNS).concat(lower(Array.isArray(extraKeywords) ? extraKeywords : []))));
+  const signals = strong.concat(weak);
+  if (signals.length === 0) return { matched: false, signals: [], hasVerb: false };
+
+  const hasVerb = CREATE_VERBS.some((verb) => hay.includes(verb.toLowerCase()));
+  const aboutExisting = EXISTING_MARKERS.some((marker) => hay.includes(marker.toLowerCase())) || PATH_LIKE.test(raw);
+
+  // A creation verb has to sit in front of the noun it governs: "做个看板" is a
+  // request; "一起做（…模板…本仓看板…）" is a discussion that happens to contain
+  // both words. Proximity is what separates them, not the word list.
+  const governed = signals.some((noun) => {
+    const at = hay.indexOf(noun.toLowerCase());
+    if (at < 0) return false;
+    const window = /[\u4e00-\u9fff]/.test(noun) ? GOVERN_WINDOW : GOVERN_WINDOW_ASCII;
+    const before = hay.slice(Math.max(0, at - window), at);
+    return CREATE_VERBS.some((verb) => before.includes(verb.toLowerCase()));
+  });
+
+  // A bare strong noun is a real request in Chinese ("项目看板"), so a short
+  // message with nothing referring to an existing canvas still fires.
+  const bare = strong.length > 0 && !aboutExisting && raw.trim().length <= GOVERN_WINDOW;
+
+  return { matched: governed || bare, signals, hasVerb };
 }
 
 /**
@@ -85,8 +120,12 @@ export function userPlainText(messages) {
 
 /**
  * The intake the model must put in front of the user before writing the file.
- * Deliberately self-contained: the entry point has to work on the first turn,
- * without a tool call to fetch a reference.
+ *
+ * Carries only what has to happen NOW - the 7 questions that become the receipt
+ * the user approves. The order of work and the quality gates live in
+ * references/intake.md and are pointed at rather than copied: a second copy of a
+ * contract drifts, and this one already had (the anchor block was added to
+ * intake.md and not here).
  * @param match - the {@link matchesCanvasIntent} result, for the signal line.
  * @returns the guidance text injected as a user-role context message.
  */
@@ -111,17 +150,11 @@ export function buildCanvasIntakeGuidance(match) {
     "6. 人要在面板上做的动作：标记进行中 / 完成 / 阻塞、认领、豁免、打开文件、把决定交回 agent；",
     "7. 更新与归档节奏：谁在什么时候更新 DATA；什么时候把条目移出当前窗口。",
     "",
-    "三、产出顺序（不要跳步）",
-    "intake 确认 → canvas_new(path, kind) → 只填 export const DATA → canvas_check 自检 → 把文件路径与「人机怎么共用这份状态」告诉用户。",
+    "三、口径确认后：canvas_new(path, kind) → 只填 export const DATA → canvas_check 自检 → 把文件路径与「人机怎么共用这份状态」告诉用户。",
     "",
-    "四、质量门槛（不满足就不算交付）",
-    "- 只内联当前窗口（在办 + 最近完成），历史外置；",
-    "- 每个数字都能追溯到 DATA 字段或真实运行输出，禁止手抄断言；",
-    "- 结论性文字用引用（文件:行 / 见 T-3），不粘贴长段落；",
-    "- 人的改动必须走 useCanvasOverlay（落 sidecar，agent 下一轮 canvas_read 可见）；",
-    "- 明细表要有证据列；看板要有派生风险与「下一步」。",
-    "",
-    "完整契约见 canvas skill 的 references/intake.md；套件 API 见 references/kit.md，范式见 references/patterns.md。",
+    "产出顺序、质量门槛、以及必须写进 DATA 的锚点三块（constraints / decisions / nextAction），",
+    "完整契约见 canvas skill 的 references/intake.md —— 动手写文件前先读它。",
+    "套件 API 见 references/kit.md，范式见 references/patterns.md。",
   ].join("\n");
 }
 

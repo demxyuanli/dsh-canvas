@@ -29,14 +29,41 @@ function listener(overrides) {
   }, overrides || {}));
 }
 
-t("a strong noun fires without a verb", () => {
+t("强名词在有创建动词时触发", () => {
   const match = matchesCanvasIntent("给我建个项目看板");
   assert.equal(match.matched, true);
   assert.ok(match.signals.includes("看板"));
 });
 
-t("英文强名词单独触发", () => {
-  assert.equal(matchesCanvasIntent("show me the dashboard").matched, true);
+t("光杆强名词（短消息）也算请求", () => {
+  assert.equal(matchesCanvasIntent("项目看板").matched, true);
+  assert.equal(matchesCanvasIntent("看板").matched, true);
+});
+
+t("英文强名词：要的是「做」不是「看」", () => {
+  assert.equal(matchesCanvasIntent("build me a dashboard").matched, true);
+  assert.equal(matchesCanvasIntent("show me the dashboard").matched, false, "看一眼不是建一个");
+});
+
+t("提到既有画布时不再误触发（本会话真实踩过）", () => {
+  const shouldFire = [
+    "建个项目的看板", "给我建个项目看板", "项目看板", "做个看板",
+    "整理一份工程现状审计报告", "build me a dashboard",
+  ];
+  const shouldStayQuiet = [
+    "②③ 一起做（schema 三块 + 模板 + 本仓看板 + resume.md）",
+    "把这张看板里的 T-3 标成完成",
+    "看板里那条门禁红了，帮我看看",
+    "这张画布的排版有点挤",
+    "更新一下 board.canvas.tsx 的进度",
+    "把这个 dashboard 的截图发我",
+    "现有看板再加一列负责人",
+    "今天的测试跑了吗",
+    "show me the dashboard",
+    "帮我修一个空指针",
+  ];
+  for (const text of shouldFire) assert.equal(matchesCanvasIntent(text).matched, true, "should fire: " + text);
+  for (const text of shouldStayQuiet) assert.equal(matchesCanvasIntent(text).matched, false, "should stay quiet: " + text);
 });
 
 t("a weak noun needs a creation verb", () => {
@@ -71,11 +98,13 @@ await ta("画布提交的任务不会再次触发 intake", async () => {
   assert.equal(out, downstream, "a work hand-off must pass through untouched");
 });
 
-t("guidance 自带 intake 与质量门槛", () => {
+t("guidance 只带 7 问与指针，质量门槛留在 intake.md（单一事实来源）", () => {
   const text = buildCanvasIntakeGuidance(matchesCanvasIntent("建个看板"));
-  for (const needle of ["意图入口", "intake", "质量门槛", "useCanvasOverlay", "references/intake.md"]) {
+  for (const needle of ["意图入口", "7 条摆给用户", "references/intake.md", "constraints / decisions / nextAction"]) {
     assert.ok(text.includes(needle), "guidance is missing " + needle);
   }
+  assert.ok(!text.includes("四、质量门槛"), "the gates must live in intake.md only, not in a second copy that drifts");
+  assert.ok(text.length < 1000, "guidance grew to " + text.length + " chars");
 });
 
 await ta("匹配时恰好追加一条带来源的 user 消息", async () => {

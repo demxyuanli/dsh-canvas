@@ -1228,9 +1228,9 @@ guide: [{ id: "workspace", commandId: "workspace.files", order: 10,
 
 - **事件面**：`agent/pre-step`（`dsh-agent` 声明的水位事件）。监听器先 `next()`，只在 `{ kind: 'enter' }` 上把消息折进批次末尾——与 `dsh-hooks-claude-code` 的 `UserPromptSubmit` 同一形状，因此后续监听器仍可拒绝或改写。
 - **`host/intent.js`**：
-  - `matchesCanvasIntent`：强名词（看板 / 画布 / 画板 / 仪表盘 / dashboard / kanban）直接命中；弱名词（canvas / board / 项目文档 / 工程现状 / 审计报告 …）需搭配创建动词；Config 的 `intentKeywords` 按弱名词处理。『the canvas plugin tests failed』这类顺带提到不会触发。
+  - `matchesCanvasIntent`：**创建动词必须治理到名词**（中文 12 字符、英文 24 字符的窗口内），再叠加"指代既有物"的抑制 —— 出现 `这张/现有/本仓`、路径或文件名（`.canvas.tsx`、`foo.md`）时必须有创建动词才触发；强名词在**短消息（≤ 12 字）且无指代**时仍可光杆触发（`项目看板`）。`帮我 / 看一下 / show me` 不算创建动词 —— 它们是"对既有的东西求助"。Config 的 `intentKeywords` 按弱名词处理。
   - `userPlainText`：只读 `source.kind === 'user'` 的消息，别的插件注入的上下文不会二次触发。
-  - `buildCanvasIntakeGuidance`：自包含的 intake（7 条对齐问题 + 产出顺序 + 质量门槛 + 指向 references/intake.md）。入口必须在第一轮就可用，不能依赖一次工具调用。
+  - `buildCanvasIntakeGuidance`：只带**必须在当下发生**的部分 —— 7 条对齐问题 + 一句指向 `references/intake.md`（产出顺序、质量门槛、锚点三块都在那里）。刻意不复制：同一份契约的第二份拷贝必然漂移，这份已经漂过一次（`intake.md` 加了锚点、注入文本没跟）。
   - `createCanvasIntentListener`：`{ getCreateUserMessage, keywords, guide, onError }`；工厂缺席、guide 抛错都放行。
 - **`index.js`**：`registerIntentHook` 用 `ctx.effect(() => ctx.on('agent/pre-step', listener))` 注册；`@deepseek-ai/dsh-llm` 的消息工厂**懒加载**，缺了只警告一次，不影响插件加载。新增配置 `intentHook`（默认 true）/ `intentKeywords` / `intentGuide`。
 - **技能**：新增 `skills/canvas/references/intake.md`（触发含义、7 条 intake 表、字段清单与缺失后果、回执模板、产出顺序、质量门槛、反模式）；`SKILL.md` 的流程补第 0 步并更新 frontmatter description；README 增加「画布意图入口」一节与三条配置。
