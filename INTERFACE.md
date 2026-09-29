@@ -44,6 +44,23 @@ host 用 `webServer.register({ kind: "prefix", path: "/canvas", handler })` 注�
   line?: number; col?: number; hint?: string }
 ~~~
 
+### 3.1 信任边界（v1 的硬约束）
+
+插件注册在 `webServer` 上的路由**不在宿主外壳的 token/cookie 边界内** —— 那道 401 只守外壳与连接（`dsh-client-connection`：根查询里的 token 换 cookie）。`webServer.register` 的签名是 `{ kind, path, handler }`，没有鉴权参数，所以边界由插件自己建立。三条：
+
+1. **POST 必须 `content-type: application/json`**，否则 `403 { ok:false, code:"unsupported" }`。理由：跨站页面只能发**简单请求**（`text/plain` / `x-www-form-urlencoded` / `multipart`）；要求 JSON 就逼它走预检，而本服务器**不回应预检** → 浏览器那条路被关掉。本机脚本（curl / PowerShell / 其它 DSH 组件）与自带 client 本来就用 JSON（`lib/client.js` 的 `postAction`）。
+2. **写操作钉在工作区根内**：`canvas_new`、`POST /canvas/overlay`、`overlaySet` / `overlayClear`、`canvas_state_merge` 五处，路径必须落在该请求解析出的根内，越界 → 拒绝并说明。**读操作不设限**（`canvas_check` / `canvas_read` / `GET /canvas/source` / `GET /canvas/overlay` / `GET /canvas/list`）—— 这是刻意的取舍：钉写能挡住「任意目录造文件 / 写 sidecar / 回写源文件」，而读的泄漏面很窄（只有能被当成画布解析的文件才会返回 `DATA`），不值得再引入一条不对称之外的规则。
+3. **权威根阶梯**：`config.workspaceRoot` → 本请求的 session cwd → `policy.workspaceRoot` → **记住的上次会话根**。落到 `process.cwd()` 时**写操作一律拒绝**：
+
+~~~json
+{ "ok": false, "code": "unsupported",
+  "message": "cannot resolve the workspace root for this write (no session and no known workspace); pass sessionId or set workspaceRoot" }
+~~~
+
+Desktop 应用的 cwd 是 profile 目录 —— 信任它就是「文件被建到 `profiles/desktop/` 下」那次事故的成因。
+
+> 已知限制：容器检查是**路径前缀**级别，不解析符号链接。根内一个指向根外的链接仍可能被写入；要彻底挡住需要 realpath 处理，收益与成本不成比例。
+
 ## 4. 动作（action）分工
 
 **client 自己处理，绝不发往 host**：

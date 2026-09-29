@@ -63,6 +63,9 @@ const CANVAS = [
 ].join("\n");
 
 const dir = await fs.mkdtemp(path.join(os.tmpdir(), "canvas-merge-"));
+// Writes are pinned to an authoritative root, so the shim exposes the real
+// resolver: the config root is this temp dir, with the session/policy rungs behind.
+state.rootFor = makeRootResolver({ get: () => undefined }, { workspaceRoot: dir }, {});
 const canvasPath = path.join(dir, "merge.canvas.tsx");
 await fs.writeFile(canvasPath, CANVAS, "utf8");
 await writeOverlay(canvasPath, { key: "tasks", id: "t1", patch: { status: "in_progress", owner: "worker-a" }, sourceSha1: null });
@@ -124,6 +127,46 @@ if (readTool !== undefined) {
 } else {
   fail++;
   console.log("FAIL canvas_read is not registered");
+}
+
+// --- writes are pinned to the workspace root ---------------------------------
+// Reads may look anywhere; writes must land inside a root somebody actually
+// knows, and the process cwd is not such a root.
+const newTool = built.get("canvas_new");
+if (newTool !== undefined) {
+  try {
+    const out = await newTool.execute({ path: "../escape.canvas.tsx", kind: "blank" }, {});
+    assert.match(out.summary, /^refused:/, out.summary);
+    const escaped = await fs.stat(path.join(path.dirname(dir), "escape.canvas.tsx")).then(() => true, () => false);
+    assert.equal(escaped, false, "a write outside the root must leave nothing behind");
+    const merge = built.get("canvas_state_merge");
+    const mergeEscape = await merge.execute({ path: "../escape.canvas.tsx" }, {});
+    assert.match(mergeEscape.summary, /^refused:/, mergeEscape.summary);
+    const inside = await newTool.execute({ path: "inside.canvas.tsx", kind: "blank" }, {});
+    assert.equal(inside.path, path.join(dir, "inside.canvas.tsx"));
+    assert.ok(inside.summary.startsWith("created "), inside.summary);
+    pass++;
+    console.log("ok   canvas_new and canvas_state_merge stay inside the root");
+  } catch (error) {
+    fail++;
+    console.log("FAIL write containment: " + (error && error.message ? error.message : error));
+  }
+
+  try {
+    // No config root, no session, nothing remembered: the cwd rung is refused.
+    const bare = { config: { limits: DEFAULT_LIMITS }, rootFor: makeRootResolver({ get: () => undefined }, { workspaceRoot: null }, {}) };
+    const bareTool = defineTool(toolDefinitions(bare).find((candidate) => candidate.name === "canvas_new"));
+    const out = await bareTool.execute({ path: "x.canvas.tsx", kind: "blank" }, {});
+    assert.match(out.summary, /cannot resolve the workspace root/, out.summary);
+    pass++;
+    console.log("ok   a write refuses the process-cwd rung");
+  } catch (error) {
+    fail++;
+    console.log("FAIL cwd rung: " + (error && error.message ? error.message : error));
+  }
+} else {
+  fail++;
+  console.log("FAIL canvas_new is not registered");
 }
 
 // --- tool root: a canvas tool must never resolve into the app's cwd ----------

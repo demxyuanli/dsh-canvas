@@ -105,6 +105,35 @@ await t("GET /canvas/api describes the surface", async () => {
   assert.ok(r.body.actions.includes("startTurn"));
 });
 
+await t("a POST without application/json is refused (cross-site simple requests)", async () => {
+  // A page can send these two content-types cross-site without a preflight; the
+  // server answers no preflight either, so requiring JSON is what closes it.
+  const plain = await fetch(origin + "/canvas/action", {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: "https://evil.example" },
+    body: JSON.stringify({ action: { type: "notify", tone: "info", message: "probe" } }),
+  });
+  assert.equal(plain.status, 403);
+  assert.equal((await plain.json()).ok, false);
+  const form = await fetch(origin + "/canvas/overlay", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://evil.example" },
+    body: "canvas=specs/demo.canvas.tsx",
+  });
+  assert.equal(form.status, 403, "form encoding is the other preflight-free shape");
+  const ok = await postJson("/canvas/api", {});
+  assert.notEqual(ok.status, 403, "the shipped client sends application/json and must still work");
+});
+
+await t("an overlay write outside the workspace root is refused", async () => {
+  const r = await postJson("/canvas/overlay", { canvas: "../outside.canvas.tsx", key: "tasks", id: "t1", patch: { status: "completed" } });
+  assert.equal(r.body.ok, false, JSON.stringify(r.body));
+  assert.equal(r.body.code, "unsupported");
+  assert.match(r.body.message, /outside/);
+  const written = await fs.stat(path.join(path.dirname(root), "outside.canvas.tsx")).then(() => true, () => false);
+  assert.equal(written, false, "nothing may be created outside the root");
+});
+
 await t("GET /canvas/list discovers the canvas with its metadata", async () => {
   const r = await getJson("/canvas/list");
   assert.equal(r.status, 200);

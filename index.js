@@ -101,15 +101,34 @@ export function makeRootResolver(ctx, config, memory) {
     if (memory !== undefined && memory !== null && found !== null) memory.lastSessionRoot = found;
     return found;
   }
-  return function rootFor(sessionId) {
-    if (config.workspaceRoot !== null) return config.workspaceRoot;
+  /**
+   * The same ladder as `rootFor`, plus which rung answered. Writes need the rung:
+   * "cwd" means nobody knows a workspace, and trusting it is how a file once
+   * landed in the Desktop app's profile directory.
+   * @returns { root, source } where source is config | session | policy | memory | cwd.
+   */
+  function describe(sessionId) {
+    if (config.workspaceRoot !== null) return { root: config.workspaceRoot, source: "config" };
     const fromSession = sessionRoot(sessionId);
-    if (fromSession !== null) return fromSession;
+    if (fromSession !== null) return { root: fromSession, source: "session" };
     const fromPolicy = policyRoot();
-    if (fromPolicy !== null) return fromPolicy;
-    if (memory !== undefined && memory !== null && typeof memory.lastSessionRoot === "string") return memory.lastSessionRoot;
-    return process.cwd();
-  };
+    if (fromPolicy !== null) return { root: fromPolicy, source: "policy" };
+    if (memory !== undefined && memory !== null && typeof memory.lastSessionRoot === "string") return { root: memory.lastSessionRoot, source: "memory" };
+    return { root: process.cwd(), source: "cwd" };
+  }
+  function rootFor(sessionId) { return describe(sessionId).root; }
+  rootFor.describe = describe;
+  return rootFor;
+}
+
+/** The session a request names: body first, then query. Undefined when it names none. */
+function requestSessionId(url, body) {
+  if (body !== null && body !== undefined && typeof body.sessionId === "string" && body.sessionId !== "") return body.sessionId;
+  if (url !== null && url !== undefined) {
+    const fromQuery = url.searchParams.get("session");
+    if (typeof fromQuery === "string" && fromQuery !== "") return fromQuery;
+  }
+  return undefined;
 }
 
 /** Per-request root: an explicit override, else the calling Session, else the policy. */
@@ -118,10 +137,47 @@ function requestRoot(state, url, body) {
     ? body.root
     : (url !== null && url !== undefined ? url.searchParams.get("root") : null);
   if (typeof explicit === "string" && explicit !== "") return explicit;
-  const sessionId = (body !== null && body !== undefined && typeof body.sessionId === "string" && body.sessionId !== "")
-    ? body.sessionId
-    : (url !== null && url !== undefined ? url.searchParams.get("session") : null);
-  return state.rootFor(sessionId);
+  return state.rootFor(requestSessionId(url, body));
+}
+
+/** Root itself, or something under it, at a path-segment boundary. */
+function isInside(root, candidate) {
+  const base = path.resolve(root);
+  const target = path.resolve(candidate);
+  const fold = process.platform === "win32" ? (value) => value.toLowerCase() : (value) => value;
+  const a = fold(base);
+  const b = fold(target);
+  return b === a || b.startsWith(a.endsWith(path.sep) ? a : a + path.sep);
+}
+
+/**
+ * Resolve a path a WRITE is about to touch.
+ *
+ * Reads may look anywhere; writes are pinned to a workspace root somebody
+ * actually knows. The "cwd" rung is refused on purpose - in the Desktop app it is
+ * the profile directory, which is where an accidental canvas_new once landed.
+ * Symlinks inside the root are not resolved, so a link pointing outside is a
+ * known, documented limit of this check rather than a silent allowance.
+ * @param state - plugin state (needs rootFor.describe).
+ * @param sessionId - the calling session, when the call has one.
+ * @param reference - the canvas reference from the caller.
+ * @param explicitRoot - a cwd the exec context supplied directly, authoritative.
+ * @returns { path, root } or { error }.
+ */
+function resolveWritePath(state, sessionId, reference, explicitRoot) {
+  if (typeof reference !== "string" || reference === "") return { error: "a canvas path is required" };
+  const detail = typeof explicitRoot === "string" && explicitRoot !== ""
+    ? { root: explicitRoot, source: "exec" }
+    : state.rootFor.describe(sessionId);
+  if (detail === undefined || detail === null || detail.source === "cwd") {
+    return { error: "cannot resolve the workspace root for this write (no session and no known workspace); pass sessionId or set workspaceRoot" };
+  }
+  const abs = resolvePath(detail.root, reference);
+  if (abs === null) return { error: "a canvas path is required" };
+  if (!isInside(detail.root, abs)) {
+    return { error: "writes are limited to the workspace root: " + abs + " is outside " + detail.root };
+  }
+  return { path: abs, root: detail.root };
 }
 
 /** Absolute path for a canvas reference; relative references resolve against the root. */
@@ -241,8 +297,9 @@ function createHandler(ctx, state) {
 
   async function handleOverlayPost(req, res) {
     const body = JSON.parse(await readBody(req, 64 * 1024));
-    const abs = resolvePath(requestRoot(state, null, body), body.canvas);
-    if (abs === null) { sendJson(res, 200, { ok: false, message: "canvas is required" }); return; }
+    const target = resolveWritePath(state, requestSessionId(null, body), body.canvas);
+    if (target.error !== undefined) { sendJson(res, 200, { ok: false, code: "unsupported", message: target.error }); return; }
+    const abs = target.path;
     let sourceSha1 = null;
     try { sourceSha1 = sha1(await fs.readFile(abs, "utf8")); } catch (error) { sourceSha1 = null; }
     const doc = await writeOverlay(abs, {
@@ -271,8 +328,9 @@ function createHandler(ctx, state) {
       return;
     }
     if (action.type === "overlaySet" || action.type === "overlayClear") {
-      const abs = resolvePath(requestRoot(state, null, body), body.canvas);
-      if (abs === null) { sendJson(res, 200, { ok: false, code: "unsupported", message: "canvas is required" }); return; }
+      const target = resolveWritePath(state, requestSessionId(null, body), body.canvas);
+      if (target.error !== undefined) { sendJson(res, 200, { ok: false, code: "unsupported", message: target.error }); return; }
+      const abs = target.path;
       let sourceSha1 = null;
       try { sourceSha1 = sha1(await fs.readFile(abs, "utf8")); } catch (error) { sourceSha1 = null; }
       const doc = await writeOverlay(abs, {
@@ -305,6 +363,15 @@ function createHandler(ctx, state) {
     try { url = new URL(req.url, "http://canvas.invalid"); }
     catch (error) { sendJson(res, 400, { ok: false, message: "bad url" }); return; }
     const pathname = url.pathname;
+    // POSTs carry prompts, commands and file writes, so they are gated harder
+    // than the reads. A browser cannot set application/json cross-site without a
+    // preflight, and this server answers no preflight - so requiring JSON closes
+    // that path. Local callers set it trivially, and the shipped client already
+    // does (lib/client.js postAction).
+    if (req.method === "POST" && !/^application\/json\b/i.test(String(req.headers["content-type"] || ""))) {
+      sendJson(res, 403, { ok: false, code: "unsupported", message: "POST " + pathname + " requires content-type: application/json" });
+      return;
+    }
     try {
       if (pathname === ROUTE_PREFIX + "/api") {
         sendJson(res, 200, {
@@ -554,27 +621,42 @@ async function templateFor(kind) {
  * only: in the Desktop app that is the profile directory, and resolving canvas
  * paths there silently creates files outside the workspace.
  */
-function toolRoot(state, exec) {
+function cwdOf(exec) {
   const context = exec === null || exec === undefined ? {} : exec;
-  let sessionId;
-  let cwd;
   try {
     const agent = context.agent;
     const session = context.session;
-    cwd = firstString(
+    return firstString(
       agent && agent.session ? agent.session.cwd : undefined,
       session ? session.cwd : undefined,
       context.cwd,
     );
-    sessionId = firstString(
+  } catch (error) { return undefined; }
+}
+
+function sessionIdOf(exec) {
+  const context = exec === null || exec === undefined ? {} : exec;
+  try {
+    const agent = context.agent;
+    const session = context.session;
+    return firstString(
       agent && agent.session ? agent.session.id : undefined,
       session ? session.id : undefined,
       agent ? agent.id : undefined,
       context.sessionId,
     );
-  } catch (error) { sessionId = undefined; cwd = undefined; }
+  } catch (error) { return undefined; }
+}
+
+function toolRoot(state, exec) {
+  const cwd = cwdOf(exec);
   if (cwd !== undefined) return cwd;
-  return state.rootFor(sessionId);
+  return state.rootFor(sessionIdOf(exec));
+}
+
+/** The path a write tool may use: exec cwd when given, else the authoritative ladder. */
+function toolWritePath(state, exec, reference) {
+  return resolveWritePath(state, sessionIdOf(exec), reference, cwdOf(exec));
 }
 
 async function registerTools(ctx, state) {
@@ -652,7 +734,11 @@ export function toolDefinitions(state) {
     },
     presentCall: function (args) { return { card: "generic", title: "New canvas", kind: "other", rawInput: args.path }; },
     async execute(args, exec) {
-      const abs = resolvePath(toolRoot(state, exec), args.path);
+      const target = toolWritePath(state, exec, args.path);
+      if (target.error !== undefined) {
+        return { path: typeof args.path === "string" ? args.path : "", summary: "refused: " + target.error, diagnostics: [] };
+      }
+      const abs = target.path;
       const body = await templateFor(args.kind);
       await fs.mkdir(path.dirname(abs), { recursive: true });
       await fs.writeFile(abs, body, "utf8");
@@ -834,7 +920,11 @@ export function toolDefinitions(state) {
     },
     presentCall: function (args) { return { card: "generic", title: "Merge canvas state", kind: "other", rawInput: args.path }; },
     async execute(args, exec) {
-      const abs = resolvePath(toolRoot(state, exec), args.path);
+      const target = toolWritePath(state, exec, args.path);
+      if (target.error !== undefined) {
+        return { ok: false, summary: "refused: " + target.error, path: typeof args.path === "string" ? args.path : "", applied: [], skipped: [], diagnostics: [] };
+      }
+      const abs = target.path;
       const source = await fs.readFile(abs, "utf8");
       const doc = await readOverlay(abs);
       const merged = mergeOverlaysIntoSource(source, doc, { key: args.key, ids: args.ids });
