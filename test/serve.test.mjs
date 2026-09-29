@@ -280,6 +280,11 @@ await t("an action body with no type names the envelope in its message", async (
 // composition configures one entry and a fake executor, so the assertions are
 // about what canvas code may and may not reach.
 const shellCalls = [];
+const policyCalls = [];
+// V-04: the executor must receive the *calling session's* resolved policy, and
+// that path only runs when the session is findable - so the composition exposes
+// one. An unfindable session must fall back to the deployment policy instead.
+const SESSION = { id: "s1", cwd: root };
 const services2 = {
   webServer: { register(route) { services2._route = route; return function () {}; } },
   shell: {
@@ -289,12 +294,22 @@ const services2 = {
     },
     async execute(spec) {
       services2._spec = spec;
+      // Mirrors dsh-pwsh-sandbox: the mode the spec carries is reported back in
+      // result.sandbox, which is what the panel renders.
       return {
-        result: async () => ({ exitCode: 0, signal: null, timedOut: false, timeoutMs: spec.timeoutMs, stdout: { text: "gate-ok\n", truncated: false }, stderr: { text: "", truncated: false } }),
+        result: async () => ({ exitCode: 0, signal: null, timedOut: false, timeoutMs: spec.timeoutMs, sandbox: spec.sandboxPolicy === undefined ? undefined : { mode: spec.sandboxPolicy.mode, enforcement: "stub" }, stdout: { text: "gate-ok\n", truncated: false }, stderr: { text: "", truncated: false } }),
       };
     },
   },
-  sandboxPolicy: { resolve: () => ({ mode: "workspace-write", workspaceRoot: root }) },
+  sessions: { get: (id) => (id === SESSION.id ? SESSION : undefined) },
+  sandboxPolicy: {
+    resolve(arg) {
+      policyCalls.push(arg);
+      const session = arg === undefined ? undefined : arg.session;
+      if (session === undefined) return { mode: "workspace-write", workspaceRoot: root };
+      return { mode: session.id === SESSION.id ? "read-only" : "workspace-write", workspaceRoot: root };
+    },
+  },
 };
 apply(makeCtx(services2), { workspaceRoot: root, commandWhitelist: [{ id: "gate:demo", title: "demo gate", command: "echo gate-ok", timeoutMs: 5000 }] });
 const server2 = http.createServer(services2._route.handler);
@@ -305,7 +320,7 @@ async function post2(url, value) {
   return { status: res.status, body: await res.json() };
 }
 
-await t("runCommand runs a whitelisted entry through ctx.shell", async () => {
+await t("runCommand runs a whitelisted entry under the calling session's policy (V-04)", async () => {
   const r = await post2("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "s1", action: { type: "runCommand", id: "gate:demo" } });
   assert.equal(r.status, 200);
   assert.equal(r.body.ok, true, JSON.stringify(r.body));
@@ -313,7 +328,20 @@ await t("runCommand runs a whitelisted entry through ctx.shell", async () => {
   assert.match(r.body.stdout, /gate-ok/);
   assert.equal(shellCalls.length, 1, "expected exactly one shell request");
   assert.equal(shellCalls[0].command, "echo gate-ok", "the command must come from the whitelist");
-  assert.equal(shellCalls[0].sandboxPolicy.mode, "workspace-write", "the session sandbox policy must reach the executor");
+  assert.equal(policyCalls.length, 1, "expected exactly one policy resolution");
+  assert.equal(policyCalls[0].session, SESSION, "the calling session must be resolved, not the deployment fallback");
+  assert.equal(shellCalls[0].sandboxPolicy.mode, "read-only", "the session policy must reach the executor");
+  assert.equal(r.body.sandbox.mode, "read-only", "V-04: a read-only session must report sandbox.mode read-only");
+});
+
+await t("an unknown session falls back to the deployment policy", async () => {
+  shellCalls.length = 0;
+  policyCalls.length = 0;
+  const r = await post2("/canvas/action", { canvas: "specs/demo.canvas.tsx", sessionId: "ghost", action: { type: "runCommand", id: "gate:demo" } });
+  assert.equal(r.body.ok, true, JSON.stringify(r.body));
+  assert.deepEqual(policyCalls, [undefined], "an unknown session must not be passed to resolve");
+  assert.equal(shellCalls[0].sandboxPolicy.mode, "workspace-write");
+  assert.equal(r.body.sandbox.mode, "workspace-write");
 });
 
 await t("runCommand refuses an id that no whitelist entry has", async () => {
