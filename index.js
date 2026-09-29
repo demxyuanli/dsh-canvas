@@ -14,6 +14,7 @@ import { ModuleStore } from "./host/store.js";
 import { readOverlay, writeOverlay, overlayPathFor, sha1, mergeRows, removeOverlayEntries } from "./host/overlay.js";
 import { discoverCanvases, readMetadata } from "./host/discovery.js";
 import { mergeOverlaysIntoSource } from "./host/merge.js";
+import { briefDigest } from "./host/brief.js";
 import { createCanvasIntentListener } from "./host/intent.js";
 import { mk } from "./host/diagnostics.js";
 
@@ -607,9 +608,10 @@ export function toolDefinitions(state) {
 
   {
     name: "canvas_read",
-    description: "Read a slice of a canvas's inline export const DATA, merged with the human sidecar, instead of reading the whole file. Also reports diagnostics.",
+    description: "Read a slice of a canvas's inline export const DATA, merged with the human sidecar, instead of reading the whole file. Also reports diagnostics.\n\nPass brief: true to get the cold-start digest instead of a slice -- use it when resuming after a context truncation, or when a fresh agent picks the project up.",
     parameters: {
       path: { type: "string", required: true, description: "Canvas path, absolute or relative to the workspace root." },
+      brief: { type: "boolean", description: "Return only the resume digest: goal, asOf/revision, nextAction, constraints, decisions, the rows still in flight and the last few activity entries. Ignores dataPath/filter/ids." },
       dataPath: { type: "string", description: "Key inside DATA, for example tasks. Omit to read all of DATA." },
       filter: { type: "object", additionalProperties: true, description: "Field equality filter applied to rows, for example { status: \"pending\" }." },
       ids: { type: "array", items: { type: "string" }, description: "Only rows with these ids." },
@@ -642,7 +644,9 @@ export function toolDefinitions(state) {
       let value = result.ok ? result.data : undefined;
       let stale = false;
       let orphans = [];
-      const key = typeof args.dataPath === "string" ? args.dataPath : null;
+      // brief is a view over the whole merged DATA, so it deliberately ignores
+      // dataPath: the point is one call that re-hydrates the project.
+      const key = args.brief === true ? null : (typeof args.dataPath === "string" ? args.dataPath : null);
       // Merge only array buckets. A scalar dataPath (e.g. "goal") must survive
       // the read unchanged: mergeRows would otherwise replace it with [].
       if (value !== undefined && key !== null && Array.isArray(value[key])) {
@@ -683,6 +687,20 @@ export function toolDefinitions(state) {
         value = Object.assign({}, value);
         value[key] = shown;
         value.__counts = { total: total, shown: shown.length, truncated: total > shown.length };
+      }
+      if (args.brief === true && value !== undefined) {
+        const digest = briefDigest(value);
+        return {
+          ok: true,
+          summary: "brief " + abs + ": " + digest.focus.length + " in flight, " + digest.constraints.length + " constraints, "
+            + digest.decisions.length + " decisions, next=" + (digest.nextAction === null || digest.nextAction === undefined || !digest.nextAction.action ? "(unset)" : digest.nextAction.action)
+            + (digest.notes.length === 0 ? "" : " - " + digest.notes.length + " note(s)"),
+          path: abs,
+          json: JSON.stringify(digest, null, 2),
+          staleOverlay: stale,
+          orphanIds: Array.from(new Set(orphans)),
+          diagnostics: result.diagnostics,
+        };
       }
       if (value !== undefined) {
         const bucket = key === null ? null : doc.overlays[key];

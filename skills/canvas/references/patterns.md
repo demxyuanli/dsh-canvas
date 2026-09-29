@@ -25,16 +25,24 @@
 H1 + Text(目标) + Text(快照日 / 修订 / WIP 上限)
 Progress              -> 加权进度（按估算人日，不是条目计数）
 Grid auto-fit         -> Stat 总数(带在办/关闭) / 在办-WIP / 阻塞 / 加权进度（一行并排，窄栏自动折 2 列）
-Callout               -> 从数据派生的风险清单（阻塞 / 超期未更新 / WIP 超限 / 超估算）
+Callout               -> 从数据派生的风险清单（阻塞 / 超期未更新 / WIP 超限 / 超估算 / 锚点自检）
+Callout(info)         -> 「现在该做」：nextAction 一句话 —— 截断后第一眼要看的就是它
 Row wrap              -> Pill 筛选（在办 / 阻塞 / 已关闭 / 全部 / 按分组）
 Stack                 -> 主体：待办在前，详情在后
   CollapsibleSection(每组, trailing=在办数·完成%) -> Progress(该组) + TodoList
   CollapsibleSection(已关闭) -> TodoList(dense)
-  Card 详情 -> Progress + KeyValue(字段) + 动作按钮
+  Card 详情 -> Progress + KeyValue(字段，含依赖) + 动作按钮
 Stack                 -> "下一步"：按优先级取前 3 条，各带一个开始按钮
 Table                 -> 明细：ID / 优先 / 分组 / 标题 / 状态 / 负责人 / 进度 / 更新
+CollapsibleSection    -> 约束与红线：rule / because / violation
+CollapsibleSection    -> 已定决策：chose / rejected / why（用来阻止重新讨论）
 CollapsibleSection    -> 活动时间线（Timeline）+ 维护说明
 ~~~
+
+**上下文锚点。** `nextAction` / `constraints` / `decisions` 不是"额外的好东西"，而是
+**截断后能否接手**的分界线：只有跟踪字段，接手的人知道你到哪了，但不知道自己能不能动
+（红线）、什么已经被否（决策）、现在该做哪一件（唯一动作）。读取配方见
+[resume.md](resume.md)。
 
 **每个条目要有的字段**（少一个，跟踪就断一条）
 

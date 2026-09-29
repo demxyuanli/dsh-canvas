@@ -62,6 +62,20 @@ canvas_read(path, "tasks", { status: "pending" })   # 只取要动的那些
 
 `canvas_read` 会抽取 `DATA`、合并人的改动、按 `dataPath` / `filter` / `ids` 切片并给出统计。**只有需要改版式时才读源文件的渲染部分。**
 
+## 接手一张已有的画布（截断 / 换会话）
+
+会话被压缩、上下文被截断、或另一个 agent 接手时：**先读画布再读代码**，而且不要全文读。
+
+~~~text
+canvas_read(path, brief: true)     # goal + nextAction + constraints + decisions + 在办行 + 最近活动
+   -> 按 nextAction.taskId 读那一条
+   -> 动手前跑门禁画布
+~~~
+
+`brief` 就是为这件事做的切片（1~3 KB），给的是「要去哪 / 什么不能碰 / 什么已经定了 /
+现在做什么」。判断口径（画布自己是否过期、怎么和仓库对账、写回纪律）见
+[references/resume.md](references/resume.md)。
+
 ## 人机一致
 
 两个状态钩子语义完全不同，用错就会让"人看到的"和"agent 看到的"分叉：
@@ -93,7 +107,7 @@ canvas_read(path, "tasks", { status: "pending" })   # 只取要动的那些
 |---|---|
 | `canvas_new` | 新建画布（唯一正确的起步方式） |
 | `canvas_check` | 每次改完源文件后自检 |
-| `canvas_read` | 需要看数据时（切片，不要全文读） |
+| `canvas_read` | 需要看数据时（切片，不要全文读）；截断后接手用 `brief: true` |
 | `canvas_state_merge` | 要把人的 sidecar 改动固化进源文件时 |
 
 ## Read next
@@ -104,4 +118,5 @@ canvas_read(path, "tasks", { status: "pending" })   # 只取要动的那些
 | 套件完整 API（组件 props、tone 枚举、钩子签名、CanvasAction） | [references/kit.md](references/kit.md) |
 | 四类画布范式（看板 / 门禁 / 时间线 / 对比）与关键片段 | [references/patterns.md](references/patterns.md) |
 | 诊断码逐条修法（`E_PARSE` / `E_DATA_NOT_LITERAL` / `W_LARGE_FILE` ...） | [references/troubleshooting.md](references/troubleshooting.md) |
+| **截断 / 换会话后怎么接手**（`brief` 读取配方、过期判断、写回纪律） | [references/resume.md](references/resume.md) |
 | 可直接运行的起步模板 | [templates/board.canvas.tsx](templates/board.canvas.tsx)、[templates/gates.canvas.tsx](templates/gates.canvas.tsx)、[templates/blank.canvas.tsx](templates/blank.canvas.tsx) |

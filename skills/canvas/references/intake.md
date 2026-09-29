@@ -39,6 +39,20 @@
 
 再加一个快照字段：`asOf`（数据快照日）。所有「多少天没动」都相对它算，**不要在画布里有"当前时间"这种会漂的状态**。
 
+### 上下文锚点（截断后接手用的三块）
+
+跟踪字段回答"现在到哪了"；这三块回答"**换会话、换 agent 之后还能不能接上**"。
+会话被压缩或上下文被截断时，接手的人读的是这三块，而不是聊天记录：
+
+| 顶层键 | 写什么 | 缺失的后果 |
+|---|---|---|
+| `nextAction` | 全局**唯一**的下一个动作：`{ taskId, action, why }` | 接手的人只能凭优先级猜，猜就是偏移 |
+| `constraints` | 红线：`{ rule, because, violation }`，`violation` 写"违反了会怎样" | 红线只活在对话里，接手的人会踩 |
+| `decisions` | 已定 + **被否决的方案**：`{ id, at, chose, rejected, why, ref }` | 已定的事被重新讨论，甚至走向已否方案 |
+
+任务上还可以有 `dependsOn: ["T-01"]`（谁必须先完成）。看板模板把这四样都渲染出来了；
+接手时的读取配方见 [resume.md](resume.md)。
+
 ## 第二步：把 intake 回执给用户确认
 
 压缩成一段，不要长篇。模板：
@@ -50,6 +64,7 @@
 - 分组：<lane 列表>
 - 每条：状态 · 进度(估/实) · 日期 · 阻塞 · 下一步 · 验收 · 证据 · 改动位置
 - 分析：加权进度 · WIP · 陈旧 · 超估算 · 分组完成度 · 下一步 3 条
+- 锚点：nextAction（唯一动作）· 红线 · 已定决策（含被否决方案）
 - 人的动作：标记状态 / 认领 / 打开文件 / 起回合
 - 更新：<谁在什么之后更新>；完成后超过一个窗口移出
 确认后我建 <path>（kind: board）。
@@ -73,6 +88,7 @@
 - **人的改动走 `useCanvasOverlay`**（落 sidecar，agent 下一轮 `canvas_read` 可见）。筛选器等纯 UI 态才用 `useCanvasState`。
 - **分析从数据现算**，不手抄结论（加权进度、风险、下一步都在渲染期算）。
 - **明细表有证据列**；看板有派生风险与「下一步」。
+- **有 `nextAction` / `constraints` / `decisions`**：截断或换人之后能在一屏内接手（见 [resume.md](resume.md)）。
 - 触发软阈值（源码 128 KB / 1500 行 / `DATA` 512 KB）时把它当必须处理的信号。
 
 ## 反模式
@@ -92,3 +108,4 @@
 - 四类范式（看板 / 门禁 / 时间线 / 对比）：[patterns.md](patterns.md)
 - 可直接起步的看板：[`templates/board.canvas.tsx`](../templates/board.canvas.tsx)
 - 诊断码逐条修法：[troubleshooting.md](troubleshooting.md)
+- 截断后怎么接手：[resume.md](resume.md)

@@ -28,11 +28,29 @@ type Task = {
 
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
-  asOf: "2026-09-28",
-  revision: "r20",
+  asOf: "2026-09-29",
+  revision: "r21",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
+  // 红线：违反其中任何一条，插件或画布会以特定方式失效——写清后果，接手的人不需要猜。
+  constraints: [
+    { rule: "画布只能 import \"dsh/canvas\"", because: "编译管线在 sucrase 之前就拒掉其他模块", violation: "E_PARSE_IMPORT（import React 也归这条）" },
+    { rule: "DATA 必须是纯字面量，不能有计算或引用", because: "host 用字面量抽取，不执行画布代码", violation: "E_DATA_NOT_LITERAL；canvas_read 与 overlay 全部失效" },
+    { rule: "runCommand 只能跑 Config 白名单里的命令", because: "命令串只能从白名单选，不能拼接", violation: "unsupported，任意命令一律拒绝" },
+    { rule: "人的状态改动必须走 overlay sidecar", because: "要保留谁改的、改了什么，并且能回写", violation: "直接改 DATA 会被 agent 下一轮写入覆盖" },
+    { rule: "client 半边零依赖，只能 require(\"react\")", because: "浏览器半边不打包，由 dsh-app:// 直接提供", violation: "引入依赖会让画布 tab 起不来" },
+  ],
+  // 已定：包含被否决的方案。截断后先读这里，避免把定过的事重新讨论一遍。
+  decisions: [
+    { id: "D1", at: "2026-09-28", chose: "概览卡并排，承载句子的内容一律纵向", rejected: ["一律单列", "全部并排"], why: "右栏窄且可调宽，长内容分栏必然挤碎", ref: "skills/canvas/references/patterns.md" },
+    { id: "D2", at: "2026-09-28", chose: "深色不另写 CSS，用 body[data-ds-dark-theme] 切 token", rejected: ["prefers-color-scheme 媒体查询", "维护第二套样式表"], why: "harness 的 light/dark 已在同一批主题表里", ref: "docs/preview/render.mjs" },
+    { id: "D3", at: "2026-09-28", chose: "人的裁决落 overlay，由 canvas_state_merge 回写源文件", rejected: ["直接改 DATA", "另存一份状态文件"], why: "保留来源、可回滚，agent 下一轮可见", ref: "INTERFACE.md §3" },
+    { id: "D4", at: "2026-09-29", chose: "desktop profile 按安装器产物复现安装（manifest + junction + pnpm）", rejected: ["改 profile 名绕过 CLI", "等官方开放 CLI"], why: "该 profile 由 Electron 应用独占，CLI 是硬编码拒绝，UI 才是官方入口", ref: "skills/canvas/references/troubleshooting.md" },
+    { id: "D5", at: "2026-09-28", chose: "startTurn 用 mode=queue + AbortSignal", rejected: ["mode=steer", "省略 signal"], why: "契约必填 signal；队列语义不抢占当前轮", ref: "DESIGN.md §27" },
+  ],
+  // 全局唯一的下一个动作。每任务的 next 是局部视角，两者不互相替代。
+  nextAction: { taskId: "V-04", action: "把 permission preset 调到 read-only，跑一条只读命令看 runCommand 的落点", why: "它是 V-05 的输入，而 V-05 是唯一阻塞发布的开放决策" },
   tasks: [
     {
       id: "V-01", lane: "verify", title: "重启后目视三张画布",
@@ -72,6 +90,7 @@ export const DATA = {
       status: "pending", priority: "P2", owner: "-",
       progress: 0, estimate: 1, actual: 0,
       startedAt: "", updatedAt: "2026-09-28", completedAt: "", blocker: "",
+      dependsOn: ["V-04"],
       goal: "没有调用方 Session 时，沙箱策略与工作区根应该怎么取",
       next: "裁决：拒绝执行（要求 session）还是显式回落；写进 INTERFACE §4.1",
       acceptance: "行为有明确文档与用例",
@@ -197,6 +216,7 @@ export const DATA = {
     { id: "a16", at: "2026-09-28", title: "画布改为单列纵向排列", tone: "success", detail: "模板 / 本仓画布 / patterns 与 kit 约定同步；不再左右分栏", ref: "skills/canvas/references/patterns.md" },
     { id: "a17", at: "2026-09-29", title: "插件在 DSH Desktop 上激活", tone: "success", detail: "装入 desktop profile 后重启：host 半边 200，四个工具可用，门禁 exit=0", ref: "profiles/desktop/package.json" },
     { id: "a18", at: "2026-09-29", title: "client 半边确认渲染", tone: "success", detail: "board.canvas.tsx 在 Desktop 打开为画布；client bundle 走 dsh-app://app/plugins/<pkg>/client.js，不经 HTTP", ref: "skills/canvas/references/troubleshooting.md" },
+    { id: "a19", at: "2026-09-29", title: "画布加入上下文锚点", tone: "success", detail: "constraints / decisions / nextAction / dependsOn：模板、本仓看板、resume.md、canvas_read brief", ref: "skills/canvas/references/resume.md" },
   ],
 } as const;
 
@@ -354,6 +374,13 @@ export default function TaskBoard() {
         </Callout>
       )}
 
+      {/* 全局唯一的下一个动作：截断后第一眼要看到的就是它 */}
+      <Callout tone="info" title={"现在该做：" + DATA.nextAction.action}>
+        <Text size="small">
+          对应 <Code>{DATA.nextAction.taskId}</Code>：{DATA.nextAction.why}
+        </Text>
+      </Callout>
+
       <Row gap={8} wrap>
         <Pill active={filter === "open"} onClick={() => setFilter("open")}>在办 {open.length}</Pill>
         <Pill active={filter === "blocked"} onClick={() => setFilter("blocked")}>阻塞 {blocked.length}</Pill>
@@ -437,6 +464,7 @@ export default function TaskBoard() {
                     { label: "证据", value: <Code>{active.evidence}</Code> },
                     { label: "改动", value: <Code>{active.write}</Code> },
                     { label: "参考", value: <Code>{active.ref}</Code> },
+                    { label: "依赖", value: (active.dependsOn ?? []).length === 0 ? "无" : (active.dependsOn ?? []).join("、"), tone: "warning" },
                     { label: "备注", value: active.note },
                   ]}
                 />
@@ -473,6 +501,7 @@ export default function TaskBoard() {
                   <Button size="sm" variant="primary" onClick={() => startTurn(task)}>开始</Button>
                   <Button size="sm" variant="ghost" onClick={() => setActiveId(task.id)}>看详情</Button>
                   {task.blocker === "" ? null : <Pill size="sm" tone="danger">阻塞</Pill>}
+                  {(task.dependsOn ?? []).length === 0 ? null : <Text size="caption" tone="warning">{"依赖 " + (task.dependsOn ?? []).join("、")}</Text>}
                 </Row>
               </Stack>
             </CardBody>
@@ -504,6 +533,29 @@ export default function TaskBoard() {
         rowTone={visible.map((task) => task.status === "blocked" ? "danger" : task.status === "completed" ? "success" : "neutral")}
       />
 
+      {/* 上下文锚点：截断或换人接手时先读这两节，避免重开已经定过的事 */}
+      <CollapsibleSection title="约束与红线" count={DATA.constraints.length}>
+        <Table
+          headers={["规则", "为什么", "违反了会怎样"]}
+          rows={DATA.constraints.map((item) => [item.rule, item.because, item.violation])}
+          emptyText="没有登记红线"
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="已定决策" count={DATA.decisions.length}>
+        <Table
+          headers={["决策", "选了", "已否决", "理由", "参考"]}
+          rows={DATA.decisions.map((item) => [
+            <Code>{item.id}</Code>,
+            item.chose,
+            item.rejected.join("、"),
+            item.why,
+            <Code>{item.ref}</Code>,
+          ])}
+          emptyText="没有登记决策"
+        />
+      </CollapsibleSection>
+
       <CollapsibleSection
         title="活动"
         count={DATA.activity.length}
@@ -529,6 +581,10 @@ export default function TaskBoard() {
           </Text>
           <Text size="small">
             人的状态改动走画布上的按钮，落进 sidecar（<Code>canvas_read</Code> 可见）；确认后由 agent 固化回 <Code>DATA</Code>。
+          </Text>
+          <Text size="small">
+            <Code>constraints</Code> / <Code>decisions</Code> / <Code>nextAction</Code> 是给"截断后接手"用的：
+            换会话时先 <Code>canvas_read brief</Code> 一把拿全，不要重读整份文件，也不要重开已定的事。
           </Text>
           <Text size="small">
             筛选器与当前选中项只存在本机（<Code>useCanvasState</Code>），刷新后保留，agent 看不到。

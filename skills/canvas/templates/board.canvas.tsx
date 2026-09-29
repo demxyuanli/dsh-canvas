@@ -17,6 +17,7 @@ type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 //   startedAt / updatedAt / completedAt    -> 停了多久、多久没动过
 //   blocker / next / acceptance            -> 卡在哪、下一步、怎样算完成
 //   evidence / write / ref                 -> 结论的证据、改动位置、参考
+//   dependsOn                              -> 谁必须先完成（可省）
 // 这张画布只保留"当前窗口"（在办 + 最近完成）；更早的历史属于另一个文件。
 type Task = {
   id: string; lane: string; title: string; status: Status; priority: string;
@@ -24,7 +25,17 @@ type Task = {
   startedAt: string; updatedAt: string; completedAt: string; blocker: string;
   goal: string; next: string; acceptance: string; evidence: string;
   write: string; ref: string; note: string;
+  dependsOn?: readonly string[];
 };
+
+// 跟踪之外的三块"上下文锚点"：会话被截断、或换一个 agent 接手时，靠它们在一屏内
+// 重建项目状态——既不用重读整份文件，也不会重开已经定过的事（见 canvas_read brief）。
+//   constraints -> 红线：必须成立的前提，以及违反了会得到什么后果
+//   decisions   -> 已定：选了什么、否了什么、为什么（防重新讨论）
+//   nextAction  -> 全局唯一的下一个动作（每任务的 next 只是局部视角）
+type Constraint = { rule: string; because: string; violation: string };
+type Decision = { id: string; at: string; chose: string; rejected: readonly string[]; why: string; ref: string };
+type NextAction = { taskId: string; action: string; why: string };
 
 export const DATA = {
   goal: "把会话令牌迁移到 v2 契约，并保住旧客户端的兼容期",
@@ -33,6 +44,20 @@ export const DATA = {
   wipLimit: 2,
   staleDays: 5,
   lanes: ["api", "ui", "infra"],
+  // 红线：不是偏好，是必须成立的前提；violation 写"违反了会怎样"。
+  constraints: [
+    { rule: "v1 令牌在校验路径上必须继续可用", because: "旧客户端无法在本周期内升级", violation: "回滚：老用户全量 401" },
+    { rule: "密钥轮换必须可中断", because: "线上已有两把活跃密钥", violation: "轮换中重启会造成双向失效" },
+    { rule: "不新增对外接口，只改内部契约", because: "接口冻结窗口已关闭", violation: "版本冻结评审直接否决" },
+  ],
+  // 已定：写清"选了什么、否了什么、为什么"——这是防止截断后重新讨论的关键。
+  decisions: [
+    { id: "D1", at: "2026-09-20", chose: "双写 v2，v1 校验保留一个发布周期", rejected: ["一次性切换", "写两套校验器"], why: "一次性切换无法回滚", ref: "docs/adr-07.md" },
+    { id: "D2", at: "2026-09-16", chose: "密钥轮换用重叠窗口", rejected: ["停机轮换"], why: "拿不到停机窗口", ref: "docs/rfc-12.md#4" },
+    { id: "D3", at: "2026-09-05", chose: "v1 保留代码但不修已知边界问题", rejected: ["继续维护 v1"], why: "投入产出比不成立，边界问题 v2 已修", ref: "docs/adr-07.md" },
+  ],
+  // 全局唯一的下一个动作；每任务的 next 是局部视角，两者不互相替代。
+  nextAction: { taskId: "T-02", action: "推动接口冻结，拿到校验路径的最终字段表", why: "T-02 是唯一压着 T-01 收尾的前置" },
   tasks: [
     {
       id: "T-01", lane: "api", title: "v2 令牌的签发与校验",
@@ -50,6 +75,7 @@ export const DATA = {
       status: "pending", priority: "P1", owner: "-",
       progress: 0, estimate: 2, actual: 0,
       startedAt: "", updatedAt: "2026-09-25", completedAt: "", blocker: "等待 T-01 冻结接口",
+      dependsOn: ["T-01"],
       goal: "登录 / 登出 / 刷新三条路径都有明确的 UI 状态",
       next: "先按 T-01 的接口草案接状态机，接口冻结后复核",
       acceptance: "三条路径各有一次手动走查记录",
@@ -192,6 +218,15 @@ export default function TaskBoard() {
   if (wip.length > DATA.wipLimit) risks.push("在办 " + wip.length + " 条，超过 WIP 上限 " + DATA.wipLimit);
   if (stale.length > 0) risks.push(stale.length + " 条超过 " + DATA.staleDays + " 天未更新：" + stale.map((task) => task.id).join("、"));
   if (overrun.length > 0) risks.push(overrun.length + " 条实际已超出估算：" + overrun.map((task) => task.id).join("、"));
+  // 锚点自检：截断后 agent 会先信这三块，所以它们指向的东西必须存在
+  if (!tasks.some((task) => task.id === DATA.nextAction.taskId)) {
+    risks.push("nextAction 指向不存在的任务：" + DATA.nextAction.taskId);
+  }
+  const premature = wip.filter((task) => (task.dependsOn ?? []).some((id) => {
+    const dependency = tasks.find((candidate) => candidate.id === id);
+    return dependency === undefined || dependency.status !== "completed";
+  }));
+  if (premature.length > 0) risks.push(premature.length + " 条在依赖未完成时已开工：" + premature.map((task) => task.id).join("、"));
 
   const nextUp = open
     .slice()
@@ -263,6 +298,13 @@ export default function TaskBoard() {
           </Stack>
         </Callout>
       )}
+
+      {/* 全局唯一的下一个动作：截断后第一眼要看到的就是它 */}
+      <Callout tone="info" title={"现在该做：" + DATA.nextAction.action}>
+        <Text size="small">
+          对应 <Code>{DATA.nextAction.taskId}</Code>：{DATA.nextAction.why}
+        </Text>
+      </Callout>
 
       <Row gap={8} wrap>
         <Pill active={filter === "open"} onClick={() => setFilter("open")}>在办 {open.length}</Pill>
@@ -347,6 +389,7 @@ export default function TaskBoard() {
                     { label: "证据", value: <Code>{active.evidence}</Code> },
                     { label: "改动", value: <Code>{active.write}</Code> },
                     { label: "参考", value: <Code>{active.ref}</Code> },
+                    { label: "依赖", value: (active.dependsOn ?? []).length === 0 ? "无" : (active.dependsOn ?? []).join("、"), tone: "warning" },
                     { label: "备注", value: active.note },
                   ]}
                 />
@@ -383,6 +426,7 @@ export default function TaskBoard() {
                   <Button size="sm" variant="primary" onClick={() => startTurn(task)}>开始</Button>
                   <Button size="sm" variant="ghost" onClick={() => setActiveId(task.id)}>看详情</Button>
                   {task.blocker === "" ? null : <Pill size="sm" tone="danger">阻塞</Pill>}
+                  {(task.dependsOn ?? []).length === 0 ? null : <Text size="caption" tone="warning">{"依赖 " + (task.dependsOn ?? []).join("、")}</Text>}
                 </Row>
               </Stack>
             </CardBody>
@@ -413,6 +457,29 @@ export default function TaskBoard() {
         ])}
         rowTone={visible.map((task) => task.status === "blocked" ? "danger" : task.status === "completed" ? "success" : "neutral")}
       />
+
+      {/* 上下文锚点：截断或换人接手时先读这两节，避免重开已经定过的事 */}
+      <CollapsibleSection title="约束与红线" count={DATA.constraints.length}>
+        <Table
+          headers={["规则", "为什么", "违反了会怎样"]}
+          rows={DATA.constraints.map((item) => [item.rule, item.because, item.violation])}
+          emptyText="没有登记红线"
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="已定决策" count={DATA.decisions.length}>
+        <Table
+          headers={["决策", "选了", "已否决", "理由", "参考"]}
+          rows={DATA.decisions.map((item) => [
+            <Code>{item.id}</Code>,
+            item.chose,
+            item.rejected.join("、"),
+            item.why,
+            <Code>{item.ref}</Code>,
+          ])}
+          emptyText="没有登记决策"
+        />
+      </CollapsibleSection>
 
       <CollapsibleSection
         title="活动"
@@ -445,6 +512,10 @@ export default function TaskBoard() {
           </Text>
           <Text size="small" tone="tertiary">
             这条画布只放当前窗口；已完成超过一个窗口的条目应移出，而不是把历史粘进来。
+          </Text>
+          <Text size="small">
+            <Code>constraints</Code> / <Code>decisions</Code> / <Code>nextAction</Code> 是给"截断后接手"用的：
+            换会话时先 <Code>canvas_read brief</Code> 一把拿全，不要重读整份文件，也不要重开已定的事。
           </Text>
         </Stack>
       </CollapsibleSection>
