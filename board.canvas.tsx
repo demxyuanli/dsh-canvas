@@ -29,7 +29,7 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-29",
-  revision: "r22",
+  revision: "r23",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -99,14 +99,14 @@ export const DATA = {
     },
     {
       id: "V-04", lane: "verify", title: "read-only 会话下的沙箱行为",
-      status: "in_progress", priority: "P1", owner: "agent",
-      progress: 75, estimate: 1, actual: 0,
-      startedAt: "2026-09-29", updatedAt: "2026-09-29", completedAt: "", blocker: "",
+      status: "completed", priority: "P1", owner: "agent",
+      progress: 100, estimate: 1, actual: 1,
+      startedAt: "2026-09-29", updatedAt: "2026-09-29", completedAt: "2026-09-29", blocker: "",
       goal: "read-only 会话里点 Run，命令以只读沙箱执行而不是被跳过",
-      next: "把本会话 preset 切到 read-only 跑一次 Run，确认 sandbox.mode=read-only 后切回",
+      next: "",
       acceptance: "返回的 sandbox.mode 为 read-only",
-      evidence: "harness 契约：dsh-pwsh-sandbox resolve() 取 request.sandboxPolicy；同机实测不同会话解析出不同 mode；补 read-only 桩测试", write: "index.js:371 + test/serve.test.mjs",
-      ref: "dsh-sandbox-policy", note: "代码与契约已验证，还差 live 一次实测：切 preset 会同时限制 agent 写文件",
+      evidence: "live：会话切 read-only 后 gate:templates 返回 sandbox.mode=read-only、denied=false，命令真的起了（exit=1 是 EPERM spawn 边界，不是被跳过）", write: "index.js:371 + test/serve.test.mjs",
+      ref: "dsh-sandbox-policy", note: "read-only 下 node --test 会 EPERM（受限模式禁管道），node <file> 同进程可跑；宿主 enforcement=partial，stderr 有 ACL 噪音",
     },
     {
       id: "F-01", lane: "host", title: "startTurn 的真实 prompt 形状",
@@ -219,6 +219,7 @@ export const DATA = {
     { id: "a19", at: "2026-09-29", title: "画布加入上下文锚点", tone: "success", detail: "constraints / decisions / nextAction / dependsOn：模板、本仓看板、resume.md、canvas_read brief", ref: "skills/canvas/references/resume.md" },
     { id: "a20", at: "2026-09-29", title: "V-04 沙箱策略透传已验证", tone: "success", detail: "dsh-pwsh-sandbox 的 resolve() 认 request.sandboxPolicy；同机实测不同会话解析出不同 mode；补 read-only 桩测试", ref: "test/serve.test.mjs" },
     { id: "a21", at: "2026-09-29", title: "V-05 现状取证", tone: "info", detail: "无 session 时走部署默认 → workspace-write 静默执行，既不拒绝也无提示", ref: "index.js:432" },
+    { id: "a22", at: "2026-09-29", title: "V-04 验收通过（live read-only）", tone: "success", detail: "切 preset 后 sandbox.mode=read-only、denied=false；顺带查清 read-only 下 node --test 因 spawn 管道被拒，node <file> 可跑", ref: "test/serve.test.mjs" },
   ],
 } as const;
 

@@ -290,3 +290,30 @@ Get-ChildItem $ud | Where-Object { [System.IO.File]::ReadAllText($_.FullName) -m
 
 命中的文件里能看到 `dsh-app://app/plugins/@local/dsh-canvas/client.js`，与官方客户端插件排列在同一批 URL 中——这就是"client 半边已经在跑"的直接证据。
 
+---
+
+## 会话是 read-only 时，门禁为什么红
+
+受限模式下程序**不能开命名管道**。`node --test` 要为每个测试文件 fork 子进程并抓输出（默认 `stdio: 'pipe'`），于是命令自己起不来：
+
+~~~text
+EPERM ... syscall: 'spawn'
+~~~
+
+**这不是门禁失败，是沙箱边界。** 看返回的 `sandbox` 就能分清：
+
+| 返回 | 含义 |
+|---|---|
+| `mode: "read-only"` + `ok: true` + `code: "ran"` | 会话策略透传正确，命令**确实被执行**（`denied: false` 表示不是被拒） |
+| `exitCode: 1` 且 stderr 有 `EPERM` / `spawn` | 命令自己起不来，多半是这条边界 |
+| `denied: true` | 真的被沙箱拒绝执行 |
+
+规避（代价从低到高）：
+
+1. **别用 read-only 会话判门禁** —— 门禁要的是真实退出码，而 read-only 会改变命令能否运行；
+2. **白名单里用同进程形式**：`node test/x.test.mjs` 直跑（自检脚本自带退出码）不需要 fork，read-only 下也能给出真实结论；`node --test` 不行；
+3. **会写临时目录的用例**在 read-only 下必然失败（沙箱连 `%TEMP%` 也拦），这类门禁只能在可写会话里跑。
+
+> Windows 上还可能看到 stderr 里有 GBK 乱码的 `InvalidOperation`，同时 `sandbox.enforcement` 为 `partial`：那是沙箱包装器给工作区授 ACL 失败后**降级继续**，命令本身照跑，与插件无关。
+
+
