@@ -167,8 +167,14 @@ async function renderOne(kit, reference, themeCss) {
   const name = stem(abs);
   const tmp = path.join(HERE, ".render-" + name + "-" + Date.now() + ".mjs");
   await fs.writeFile(tmp, compiled.code, "utf8");
-  const mod = await import(pathToFileURL(tmp).href + "?v=" + Date.now());
-  await fs.rm(tmp, { force: true });
+  let mod;
+  try {
+    mod = await import(pathToFileURL(tmp).href + "?v=" + Date.now());
+  } finally {
+    // A canvas that compiles but fails to link throws here; without the finally
+    // the temp module would be left behind for git to pick up.
+    await fs.rm(tmp, { force: true });
+  }
   const title = compiled.data !== undefined && typeof compiled.data === "object" && typeof compiled.data.goal === "string"
     ? compiled.data.goal
     : path.basename(abs);

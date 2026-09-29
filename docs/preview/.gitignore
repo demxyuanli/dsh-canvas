@@ -1,2 +1,3 @@
 # Generated intermediates - the committed artifacts are the .png files.
 *.html
+.render-*.mjs
