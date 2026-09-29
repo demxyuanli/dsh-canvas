@@ -29,7 +29,7 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-28",
-  revision: "r18",
+  revision: "r19",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -37,13 +37,13 @@ export const DATA = {
     {
       id: "V-01", lane: "verify", title: "重启后目视三张画布",
       status: "in_progress", priority: "P0", owner: "human",
-      progress: 60, estimate: 1, actual: 0,
-      startedAt: "2026-09-28", updatedAt: "2026-09-28", completedAt: "", blocker: "",
+      progress: 75, estimate: 1, actual: 0,
+      startedAt: "2026-09-28", updatedAt: "2026-09-29", completedAt: "", blocker: "",
       goal: "确认套件在真实页面里渲染正确（含滚动、边距与排版修复）",
-      next: "刷新 GUI，逐张打开 board / gates / selfcheck 目视一次",
+      next: "在 Desktop 打开 board / gates / selfcheck，确认渲染为画布而非文本预览",
       acceptance: "三张画布都渲染；控制台无 slot entry crashed",
-      evidence: "DevTools console", write: "lib/client.js",
-      ref: "DESIGN.md §25 §26", note: "滚动条与排版刚修，需要人眼确认",
+      evidence: "Desktop host 已激活：/canvas/api 200、canvas_check 可用、gate:templates exit=0", write: "lib/client.js",
+      ref: "DESIGN.md §25 §26", note: "host 半边已实测；client 半边待 UI 确认",
     },
     {
       id: "V-02", lane: "verify", title: "画布意图入口真实触发",
@@ -194,7 +194,8 @@ export const DATA = {
     { id: "a13", at: "2026-09-28", title: "action 信封两端对齐 + host 兼容扁平形状", tone: "success", detail: "四条 host 动作恢复；接缝补上双向断言", ref: "DESIGN.md §28" },
     { id: "a14", at: "2026-09-28", title: "runCommand 在真实 ctx.shell 上 exit=0", tone: "success", detail: "profile 登记 gate:tests / gate:templates；新建 gates.canvas.tsx", ref: "cordis.patch.yml" },
     { id: "a15", at: "2026-09-28", title: "意图入口不再被任务提交触发", tone: "success", detail: "按 source.rpcId 的 canvas-* 前缀过滤", ref: "host/intent.js" },
-    { id: "a16", at: "2026-09-28", title: "画布改为单列纵向排列", tone: "success", detail: "模板 / 本仓画布 / patterns 与 kit 约定同步；不再左右分栏", ref: "skills/canvas/references/patterns.md" }
+    { id: "a16", at: "2026-09-28", title: "画布改为单列纵向排列", tone: "success", detail: "模板 / 本仓画布 / patterns 与 kit 约定同步；不再左右分栏", ref: "skills/canvas/references/patterns.md" },
+    { id: "a17", at: "2026-09-29", title: "插件在 DSH Desktop 上激活", tone: "success", detail: "装入 desktop profile 后重启：host 半边 200，四个工具可用，门禁 exit=0", ref: "profiles/desktop/package.json" },
   ],
 } as const;
 
