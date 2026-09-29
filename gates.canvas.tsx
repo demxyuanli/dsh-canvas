@@ -9,6 +9,7 @@ import {
   Text,
   Code,
   Stack,
+  Grid,
   Row,
   Divider,
   Card,
@@ -116,12 +117,13 @@ export default function GateDashboard() {
         </Text>
       </Stack>
 
-      <Stack gap={16}>
+      {/* 概览卡只有「一个数字 + 一句标签」，允许并排 */}
+      <Grid columns="repeat(auto-fit, minmax(120px, 1fr))" gap={16}>
         <Stat value={gates.length} label="gates" />
         <Stat value={gates.filter((g) => g.status === "pass").length} label="pass" tone="success" />
         <Stat value={failing.length} label="fail" tone={failing.length > 0 ? "danger" : "neutral"} />
         <Stat value={gates.filter((g) => g.status === "acked").length} label="acked" tone="neutral" />
-      </Stack>
+      </Grid>
 
       {failing.length > 0 ? (
         <Callout tone="danger" title={String(failing.length) + " 条门禁未通过"}>

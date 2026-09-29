@@ -4,7 +4,7 @@
  * icon: board
  */
 import {
-  H1, H2, Text, Code, Stack, Row, Divider, Card, CardBody, CardHeader,
+  H1, H2, Text, Code, Stack, Grid, Row, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, TodoList, Pill, Button, Progress, KeyValue, Timeline,
   CollapsibleSection, useMemo, useCanvasState, useCanvasOverlay, useCanvasAction,
 } from "dsh/canvas";
@@ -239,7 +239,8 @@ export default function TaskBoard() {
         />
       </Stack>
 
-      <Stack gap={12}>
+      {/* 概览卡只有「一个数字 + 一句标签」，允许并排；auto-fit 让窄栏自动折成 2 列 */}
+      <Grid columns="repeat(auto-fit, minmax(120px, 1fr))" gap={12}>
         <Stat value={tasks.length} label="跟踪中" hint={"在办 " + open.length + " · 关闭 " + closed.length} />
         <Stat value={wip.length + "/" + DATA.wipLimit} label="在办 / WIP 上限" tone={wip.length > DATA.wipLimit ? "danger" : "info"} />
         <Stat
@@ -249,7 +250,7 @@ export default function TaskBoard() {
           hint={blocked.length > 0 ? blocked.map((task) => task.id).join("、") : "无"}
         />
         <Stat value={progressPct + "%"} label="加权进度" tone={progressPct >= 70 ? "success" : "warning"} hint={Math.round(weighted / 100) + " / " + estTotal + " 人日"} />
-      </Stack>
+      </Grid>
 
       {risks.length === 0 ? (
         <Callout tone="success" title="没有需要立即处理的风险">

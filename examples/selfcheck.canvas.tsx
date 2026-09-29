@@ -4,7 +4,7 @@
  * icon: board
  */
 import {
-  H1, H2, Text, Code, Stack, Row, Divider, Card, CardBody, CardHeader,
+  H1, H2, Text, Code, Stack, Grid, Row, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, BarChart, TodoList, Pill, Button, CollapsibleSection,
   Progress, KeyValue, Timeline,
   useCanvasState, useCanvasOverlay, useCanvasAction, useMemo,
@@ -86,11 +86,12 @@ export default function SelfCheck() {
         the buttons below hand work back to the agent.
       </Text>
 
-      <Stack gap={12}>
+      {/* 概览卡只有「一个数字 + 一句标签」，允许并排 */}
+      <Grid columns="repeat(auto-fit, minmax(120px, 1fr))" gap={12}>
         <Stat value={String(done) + "/" + String(rows.length)} label="Stages verified" tone="success" />
         <Stat value="94" label="Host assertions" tone="info" />
         <Stat value="0" label="Browser assertions" tone="warning" hint="no browser control in this session" />
-      </Stack>
+      </Grid>
 
       <Callout tone="warning" title="What is NOT verified yet">
         The client bundle is only served after the GUI restarts, because the running page

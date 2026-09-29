@@ -8,6 +8,7 @@ import {
   Text,
   Code,
   Stack,
+  Grid,
   Stat,
   Callout,
   CollapsibleSection,
@@ -35,11 +36,12 @@ export default function BlankCanvas() {
         <Text tone="secondary">{DATA.note}</Text>
       </Stack>
 
-      <Stack gap={16}>
+      {/* 概览卡只有「一个数字 + 一句标签」，允许并排 */}
+      <Grid columns="repeat(auto-fit, minmax(120px, 1fr))" gap={16}>
         <Stat value={total} label="items" />
         <Stat value={done} label="completed" tone="success" />
         <Stat value={total - done} label="open" tone="warning" />
-      </Stack>
+      </Grid>
 
       <Callout tone="info" title="下一步">
         <Stack gap={4}>
