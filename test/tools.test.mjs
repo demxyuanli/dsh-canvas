@@ -228,6 +228,41 @@ if (readTool !== undefined) {
   console.log("ok   root precedence: config > session > memory > policy > cwd");
 }
 
+// The exec and session shapes the harness really produces. Reading only the flat
+// `cwd` made both rungs return nothing, so a relative write fell through to the
+// policy root - the Desktop app data directory - which is the canvas_new bug again.
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-canvas-root-"));
+  const emptyCtx = { get: () => undefined };
+  const policyCtx = { get: (name) => (name === "sandboxPolicy" ? { workspaceRoot: path.join(dir, "policy") } : undefined) };
+  const recordCtx = { get: (name) => (name === "sessions" ? { get: (id) => (id === "s-1" ? { agent: { session: { header: { cwd: path.join(dir, "by-record") } } } } : undefined) } : undefined) };
+  const flatCtx = { get: (name) => (name === "sessions" ? { get: (id) => (id === "s-2" ? { cwd: path.join(dir, "flat") } : undefined) } : undefined) };
+  const call = async (rootFor, exec, reference) => {
+    state.rootFor = rootFor;
+    return built.get("canvas_new").execute({ path: reference, kind: "blank" }, exec);
+  };
+
+  const viaExec = await call(makeRootResolver(emptyCtx, { workspaceRoot: null }, {}), { agent: { session: { header: { cwd: dir } } } }, "via-exec.canvas.tsx");
+  assert.equal(viaExec.path, path.join(dir, "via-exec.canvas.tsx"), "the exec cwd lives at agent.session.header.cwd");
+
+  const viaRecord = await call(makeRootResolver(recordCtx, { workspaceRoot: null }, {}), { agent: { session: { id: "s-1" } } }, "via-record.canvas.tsx");
+  assert.equal(viaRecord.path, path.join(dir, "by-record", "via-record.canvas.tsx"), "ctx.sessions.get(id) nests the cwd under agent.session.header too");
+
+  const viaFlat = await call(makeRootResolver(flatCtx, { workspaceRoot: null }, {}), { agent: { session: { id: "s-2" } } }, "via-flat.canvas.tsx");
+  assert.equal(viaFlat.path, path.join(dir, "flat", "via-flat.canvas.tsx"), "a flat session.cwd still resolves");
+
+  const refusedPolicy = await call(makeRootResolver(policyCtx, { workspaceRoot: null }, {}), {}, "refused-policy.canvas.tsx");
+  assert.ok(refusedPolicy.summary.startsWith("refused:"), "the policy root is not a workspace: " + refusedPolicy.summary);
+  assert.equal(await fs.stat(path.join(dir, "policy", "refused-policy.canvas.tsx")).catch(() => false), false, "nothing may be written under the policy root");
+
+  const refusedCwd = await call(makeRootResolver(emptyCtx, { workspaceRoot: null }, {}), { cwd: process.cwd() }, "refused-cwd.canvas.tsx");
+  assert.ok(refusedCwd.summary.startsWith("refused:"), "an exec cwd that is just process.cwd() is refused: " + refusedCwd.summary);
+
+  await fs.rm(dir, { recursive: true, force: true });
+  pass++;
+  console.log("ok   exec/session cwd shapes, and the refusals that keep the policy root out of writes");
+}
+
 await fs.rm(sessionDir, { recursive: true, force: true });
 await fs.rm(dir, { recursive: true, force: true });
 console.log("\n" + pass + " compiled, " + fail + " rejected");

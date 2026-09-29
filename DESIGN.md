@@ -1347,6 +1347,25 @@ guide: [{ id: "workspace", commandId: "workspace.files", order: 10,
 **首次尝试暴露的兜底问题**（记为 V-05，未决）：不带 `sessionId` 时 `runCommand` 用 `sandboxPolicy.resolve()` 的部署默认 —— 模式 `workspace-write` + 回落根 `D:\source\repos\AIEngineering`，Windows ACL runner 在该目录上 `SetNamedSecurityInfoW` 失败（Win32 5），执行器拒绝在无约束下运行。面板总会带 `sessionId`，所以不影响按钮；但「没有 Session 时该怎么办」需要一条明确裁决（拒绝执行 / 显式回落），并写进 INTERFACE §4.1。
 
 **意图入口噪音**：点「开始」提交的任务带 `source.rpcId = "canvas-…"`，而 prompt 里含「画布」，于是 intake 指引被再次注入 —— 一个已经跟踪的任务被要求重新做 intake。修复：`userPlainText` 跳过 `rpcId` 以 `canvas-` 开头的消息（`startTurn` 铸的 id）。文本是自由格式，`rpcId` 才是可靠信号。回归：`test/intent.test.mjs` +2。
+## 31. 修订记录（续：canvas_new 把文件建进应用数据目录 —— 根因与修复）
+
+**现象**：重启后（冷启动）`canvas_new({ path: "canvases/project-board.canvas.tsx", kind: "board" })` 返回的路径落在 `profiles/desktop/canvases/` —— 应用数据目录，而不是工作区 `D:/source/repos/dsh-canvas`。
+
+**取证**（三条，逐条排除）：
+
+1. `/canvas/api` 无 session → `profiles/desktop`；**带本会话 id 也是** `profiles/desktop`。⇒ 不是「session 没传」，而是**会话那一级根本解析不出来**。
+2. harness 自己的工具实现读 `exec.agent?.session.header.cwd`（`dsh-tools/lib/index.js` 与 `ptc.js`），而 PTC 只把这值放进**程序级** `runtime.resolve`，**不进嵌套工具调用的 exec**；`cwdOf` 却只读 `agent.session.cwd` / `session.cwd` / `context.cwd` → 恒为 undefined。
+3. `ctx.sessions.get(id)` 交回的记录把 cwd 嵌在 `agent.session.header.cwd`（`dsh-acp` 用 `record.agent.session`），而 `sessionRoot` 只读 `session.cwd ?? session.header.cwd` → 也是 undefined。
+
+⇒ 两级同时失效，阶梯一路掉到 `policy.workspaceRoot`（= 应用数据目录）。**此前 R-03 的「验证通过」是被 `memory` 那一级掩盖的**：那个进程早先被会话查询喂过，冷启动 memory 为空才暴露。
+
+**修复**：
+
+- 新增 `cwdFrom(value)`：按 `session.header.cwd → agent.session.header.cwd → agent.session.cwd → header.cwd → cwd` 读取，**两条路径共用**（`cwdOf(exec)` 与 `sessionRoot` 的服务探测）；`sessionRoot` 的探测方法补上 `resolveAgent`（`dsh-schedule` 用的就是 `sessionController.resolveAgent`）。
+- `resolveWritePath` 增加两条拒绝：`policy` 根、exec 根等于 `process.cwd()`。写只发生在「有人真的知道的工作区」上。
+- 测试：`test/tools.test.mjs` 新增一组 —— exec 的 `agent.session.header.cwd`、`ctx.sessions.get` 的嵌套记录、扁平 `session.cwd` 三条正向；`policy` 根与进程 cwd 两条拒绝，且拒绝后**磁盘上必须没有文件**。
+
+**遗留**：修复需重启才生效；运行中的进程仍按旧逻辑解析（本次已删掉误建的副本，并按同一套操作把文件建到工作区）。
 
 ## 30. 修订记录（续：实现审查 —— 信任边界、意图精度、画布生命周期）
 

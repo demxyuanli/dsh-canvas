@@ -50,9 +50,11 @@ host 用 `webServer.register({ kind: "prefix", path: "/canvas", handler })` 注�
 
 1. **POST 必须 `content-type: application/json`**，否则 `403 { ok:false, code:"unsupported" }`。理由：跨站页面只能发**简单请求**（`text/plain` / `x-www-form-urlencoded` / `multipart`）；要求 JSON 就逼它走预检，而本服务器**不回应预检** → 浏览器那条路被关掉。本机脚本（curl / PowerShell / 其它 DSH 组件）与自带 client 本来就用 JSON（`lib/client.js` 的 `postAction`）。
 2. **写操作钉在工作区根内**：`canvas_new`、`POST /canvas/overlay`、`overlaySet` / `overlayClear`、`canvas_state_merge` 五处，路径必须落在该请求解析出的根内，越界 → 拒绝并说明。**读操作不设限**（`canvas_check` / `canvas_read` / `GET /canvas/source` / `GET /canvas/overlay` / `GET /canvas/list`）—— 这是刻意的取舍：钉写能挡住「任意目录造文件 / 写 sidecar / 回写源文件」，而读的泄漏面很窄（只有能被当成画布解析的文件才会返回 `DATA`），不值得再引入一条不对称之外的规则。
-3. **权威根阶梯**：`config.workspaceRoot` → 本请求的 session cwd → **记住的上次会话根** → `policy.workspaceRoot`。落到 `process.cwd()` 时**写操作一律拒绝**：
+3. **权威根阶梯**：`config.workspaceRoot` → 本请求的 session cwd → **记住的上次会话根** → `policy.workspaceRoot`。**写操作**另外拒绝三种取值：落到 `process.cwd()`、只拿到 `policy.workspaceRoot`、或 exec 给的「工作目录」就是 `process.cwd()`。
 
-   > 「记住的上次会话根」排在 policy 之前是刻意的：Desktop 的 `ctx.sandboxPolicy.workspaceRoot` 是**应用数据目录**（实测 `profiles/desktop`），让一个真正见过的工作区优先于它，无 session 的写才不会落在应用自己的目录里。
+   > 三处拒绝是同一条实测教训：Desktop 的 `ctx.sandboxPolicy.workspaceRoot` 与 `process.cwd()` 都是**应用数据目录**（实测 `profiles/desktop`）—— 它既不是用户的工程目录，也不该被当成写目标。写要的是**有人真的知道的工作区**（config / session / 记住的上次会话根 / exec 里那个真 workspace），拿不到就拒绝，绝不猜。
+
+   cwd 的读取位置同样是实证的：harness 自己的工具实现读 `exec.agent.session.header.cwd`（`dsh-tools`），`ctx.sessions.get(id)` 交回的会话记录也把它嵌在 `agent.session.header`（`dsh-acp` 用 `record.agent.session`）—— **只读扁平的 `cwd` 会让两条路径同时读不到根**，这正是 0.2.0 里 `canvas_new` 把看板建进应用数据目录的原因。 cwd 的读取与拒绝逻辑见 DESIGN §31。
 
 ~~~json
 { "ok": false, "code": "unsupported",

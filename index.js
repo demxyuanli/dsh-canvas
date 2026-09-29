@@ -69,6 +69,35 @@ function serviceOf(ctx, name) {
  * uses. Config wins, then the Session, then the policy, then the process cwd.
  * @returns (sessionId) => root.
  */
+/**
+ * The working directory inside a Session-ish value, however it is nested.
+ *
+ * The harness reads it as \`agent.session.header.cwd\` (see dsh-tools' own tool
+ * implementations), the record \`ctx.sessions.get(id)\` hands back nests it the same
+ * way (see dsh-acp: \`record.agent.session\`), and some call sites carry it flat.
+ * Reading only the flat shape made BOTH the session rung and the exec rung return
+ * nothing, so every relative write fell through to the policy root - the app data
+ * directory - which is exactly where an accidental canvas_new landed.
+ * @param value - an exec context, a session record, an agent, or a session.
+ * @returns the cwd, or undefined when this value carries none.
+ */
+function cwdFrom(value) {
+  if (value === undefined || value === null) return undefined;
+  const agent = value.agent;
+  const session = value.session;
+  const header = value.header;
+  const sessionHeader = session !== undefined && session !== null ? session.header : undefined;
+  const agentSession = agent !== undefined && agent !== null ? agent.session : undefined;
+  const agentSessionHeader = agentSession !== undefined && agentSession !== null ? agentSession.header : undefined;
+  return firstString(
+    sessionHeader !== undefined && sessionHeader !== null ? sessionHeader.cwd : undefined,
+    agentSessionHeader !== undefined && agentSessionHeader !== null ? agentSessionHeader.cwd : undefined,
+    agentSession !== undefined && agentSession !== null ? agentSession.cwd : undefined,
+    header !== undefined && header !== null ? header.cwd : undefined,
+    value.cwd,
+  );
+}
+
 export function makeRootResolver(ctx, config, memory) {
   const cache = new Map();
   function policyRoot() {
@@ -83,11 +112,11 @@ export function makeRootResolver(ctx, config, memory) {
     for (const name of ["sessions", "sessionManager", "agents", "sessionController"]) {
       const service = serviceOf(ctx, name);
       if (service === undefined || service === null) continue;
-      for (const method of ["get", "find", "resolve", "byId"]) {
+      for (const method of ["get", "find", "resolve", "resolveAgent", "byId"]) {
         if (typeof service[method] !== "function") continue;
         try {
           const session = service[method](sessionId);
-          const cwd = session === undefined || session === null ? undefined : (session.cwd ?? (session.header === undefined ? undefined : session.header.cwd));
+          const cwd = cwdFrom(session);
           if (typeof cwd === "string" && cwd !== "") found = cwd;
         } catch (error) { /* not this accessor */ }
         if (found !== null) break;
@@ -144,6 +173,12 @@ function requestRoot(state, url, body) {
   return state.rootFor(requestSessionId(url, body));
 }
 
+/** Same directory, case-insensitively on Windows. */
+function sameDir(a, b) {
+  const fold = process.platform === "win32" ? (value) => value.toLowerCase() : (value) => value;
+  return fold(path.resolve(a)) === fold(path.resolve(b));
+}
+
 /** Root itself, or something under it, at a path-segment boundary. */
 function isInside(root, candidate) {
   const base = path.resolve(root);
@@ -175,6 +210,16 @@ function resolveWritePath(state, sessionId, reference, explicitRoot) {
     : state.rootFor.describe(sessionId);
   if (detail === undefined || detail === null || detail.source === "cwd") {
     return { error: "cannot resolve the workspace root for this write (no session and no known workspace); pass sessionId or set workspaceRoot" };
+  }
+  // The sandbox policy root says where the sandbox DEFAULTS, not where the user's
+  // project is: in the Desktop app it is the application data directory, and two
+  // separate bugs have now written canvases into it. A write needs a root somebody
+  // actually knows (config / session / remembered workspace / a real exec cwd).
+  if (detail.source === "policy") {
+    return { error: "cannot resolve the workspace root for this write: the only root on offer is the sandbox policy root (" + detail.root + "), which in the Desktop app is the application data directory; pass sessionId or set workspaceRoot" };
+  }
+  if (detail.source === "exec" && sameDir(detail.root, process.cwd())) {
+    return { error: "cannot resolve the workspace root for this write: the exec context only offered the process working directory (" + detail.root + ")" };
   }
   const abs = resolvePath(detail.root, reference);
   if (abs === null) return { error: "a canvas path is required" };
@@ -635,13 +680,8 @@ function stripHiddenMarker(source) {
 function cwdOf(exec) {
   const context = exec === null || exec === undefined ? {} : exec;
   try {
-    const agent = context.agent;
-    const session = context.session;
-    return firstString(
-      agent && agent.session ? agent.session.cwd : undefined,
-      session ? session.cwd : undefined,
-      context.cwd,
-    );
+    // exec.agent.session.header.cwd is the field the harness itself reads.
+    return cwdFrom(context);
   } catch (error) { return undefined; }
 }
 
