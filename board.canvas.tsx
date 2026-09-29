@@ -29,7 +29,7 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-29",
-  revision: "r23",
+  revision: "r24",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -50,7 +50,7 @@ export const DATA = {
     { id: "D5", at: "2026-09-28", chose: "startTurn 用 mode=queue + AbortSignal", rejected: ["mode=steer", "省略 signal"], why: "契约必填 signal；队列语义不抢占当前轮", ref: "DESIGN.md §27" },
   ],
   // 全局唯一的下一个动作。每任务的 next 是局部视角，两者不互相替代。
-  nextAction: { taskId: "V-04", action: "把 permission preset 调到 read-only，跑一条只读命令看 runCommand 的落点", why: "它是 V-05 的输入，而 V-05 是唯一阻塞发布的开放决策" },
+  nextAction: { taskId: "V-05", action: "裁决无 Session 时 runCommand 的兜底：拒绝执行还是显式回落，并写进 INTERFACE §4.1", why: "V-04 的沙箱结论已到手，它是唯一还开着的任务" },
   tasks: [
     {
       id: "V-01", lane: "verify", title: "重启后目视三张画布",
@@ -220,6 +220,7 @@ export const DATA = {
     { id: "a20", at: "2026-09-29", title: "V-04 沙箱策略透传已验证", tone: "success", detail: "dsh-pwsh-sandbox 的 resolve() 认 request.sandboxPolicy；同机实测不同会话解析出不同 mode；补 read-only 桩测试", ref: "test/serve.test.mjs" },
     { id: "a21", at: "2026-09-29", title: "V-05 现状取证", tone: "info", detail: "无 session 时走部署默认 → workspace-write 静默执行，既不拒绝也无提示", ref: "index.js:432" },
     { id: "a22", at: "2026-09-29", title: "V-04 验收通过（live read-only）", tone: "success", detail: "切 preset 后 sandbox.mode=read-only、denied=false；顺带查清 read-only 下 node --test 因 spawn 管道被拒，node <file> 可跑", ref: "test/serve.test.mjs" },
+    { id: "a23", at: "2026-09-29", title: "摘要自检抓到自己造的漂移", tone: "warning", detail: "V-04 完成后 nextAction 仍指它；brief 只查了 taskId 存在性，补上「指向已关闭行」的报警", ref: "host/brief.js" },
   ],
 } as const;
 

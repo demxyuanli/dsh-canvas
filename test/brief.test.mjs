@@ -88,6 +88,29 @@ check("dangling anchors are reported", () => {
   assert.ok(broken.notes.some((note) => note.includes("t8")), "unknown dependsOn must be flagged");
 });
 
+check("a nextAction aimed at a closed row is reported", () => {
+  // Found by using the digest: V-04 completed while nextAction still named it,
+  // so the one field a resuming agent acts on read as "do this" after it was done.
+  const stale = briefDigest({
+    goal: "g", constraints: [], decisions: [],
+    nextAction: { taskId: "t1", action: "do", why: "w" },
+    tasks: [
+      { id: "t1", status: "completed" },
+      { id: "t2", status: "pending" },
+    ],
+  });
+  assert.ok(stale.notes.some((note) => note.includes("already completed")), "expected a note about the closed target");
+  const aimed = briefDigest({
+    goal: "g", constraints: [], decisions: [],
+    nextAction: { taskId: "t2", action: "do", why: "w" },
+    tasks: [
+      { id: "t1", status: "completed" },
+      { id: "t2", status: "pending" },
+    ],
+  });
+  assert.deepEqual(aimed.notes, [], "an open target must stay quiet");
+});
+
 check("an empty nextAction.action is reported", () => {
   const empty = briefDigest({ goal: "g", nextAction: { action: "" }, constraints: [], decisions: [], tasks: [{ id: "t1", status: "pending" }] });
   assert.ok(empty.notes.some((note) => note.includes("nextAction.action is empty")));

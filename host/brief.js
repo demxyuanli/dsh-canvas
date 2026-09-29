@@ -66,6 +66,7 @@ export function briefDigest(data, options = {}) {
   const activityLimit = Number.isInteger(options.activityLimit) ? options.activityLimit : 3;
   const tasks = Array.isArray(data.tasks) ? data.tasks.filter((t) => t !== null && typeof t === "object") : [];
   const ids = new Set(tasks.map((t) => t.id));
+  const byId = new Map(tasks.map((t) => [t.id, t]));
   const notes = [];
 
   const focus = tasks.filter((t) => OPEN_STATUSES.has(t.status)).slice(0, focusLimit).map((t) => pick(t, FOCUS_FIELDS));
@@ -77,8 +78,15 @@ export function briefDigest(data, options = {}) {
     notes.push("no nextAction in DATA: after a truncation the agent cannot tell which single step comes first");
   } else {
     if (typeof data.nextAction.action !== "string" || data.nextAction.action === "") notes.push("nextAction.action is empty");
-    if (typeof data.nextAction.taskId === "string" && !ids.has(data.nextAction.taskId)) {
-      notes.push("nextAction.taskId " + data.nextAction.taskId + " does not exist in tasks[]");
+    if (typeof data.nextAction.taskId === "string") {
+      const target = byId.get(data.nextAction.taskId);
+      if (target === undefined) {
+        notes.push("nextAction.taskId " + data.nextAction.taskId + " does not exist in tasks[]");
+      } else if (!OPEN_STATUSES.has(target.status)) {
+        // Pointing the single next step at a closed row is exactly the drift the
+        // digest exists to catch: it reads as "do this" after it is done.
+        notes.push("nextAction.taskId " + data.nextAction.taskId + " is already " + String(target.status) + "; point it at the next open row");
+      }
     }
   }
   for (const task of tasks) {
