@@ -1362,7 +1362,7 @@ guide: [{ id: "workspace", commandId: "workspace.files", order: 10,
 |---|---|---|
 | 入口 | POST 只接受 `application/json`，否则 403 | `index.js` 入口 + INTERFACE §3.1 |
 | 路径 | **只钉写**、读放开；写越界即拒 | `resolveWritePath`（五处写调用点）；ADR 0001 |
-| 权威根 | config → 本请求 session → policy → 记住的上次会话根；落到 `process.cwd()` 写操作拒绝 | `rootFor.describe()` |
+| 权威根 | config → 本请求 session → **记住的上次会话根** → policy；落到 `process.cwd()` 写操作拒绝 | `rootFor.describe()` |
 | 意图精度 | 创建动词须**治理**到名词（中文 12 / 英文 24 字符窗口）+ 指代既有物的抑制 | `host/intent.js` |
 | 注入 | 985 → 845 字符：只留 7 问 + 指针，质量门槛不再复制（那份拷贝已漂移） | `buildCanvasIntakeGuidance` |
 | 生命周期 | 头部 `hidden: true` 不进 picker；`canvas_new` 剥掉该行 | `discovery.js` + `canvas_new` |

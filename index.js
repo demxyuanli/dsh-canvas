@@ -105,15 +105,19 @@ export function makeRootResolver(ctx, config, memory) {
    * The same ladder as `rootFor`, plus which rung answered. Writes need the rung:
    * "cwd" means nobody knows a workspace, and trusting it is how a file once
    * landed in the Desktop app's profile directory.
-   * @returns { root, source } where source is config | session | policy | memory | cwd.
+   * @returns { root, source }, in precedence order: config | session | memory | policy | cwd.
    */
   function describe(sessionId) {
     if (config.workspaceRoot !== null) return { root: config.workspaceRoot, source: "config" };
     const fromSession = sessionRoot(sessionId);
     if (fromSession !== null) return { root: fromSession, source: "session" };
+    // The remembered Session root outranks the policy root on purpose. In the
+    // Desktop app ctx.sandboxPolicy.workspaceRoot is the *application data*
+    // directory (verified: profiles/desktop), so trusting it over a workspace we
+    // have actually seen would point session-less writes at the app's own folder.
+    if (memory !== undefined && memory !== null && typeof memory.lastSessionRoot === "string") return { root: memory.lastSessionRoot, source: "memory" };
     const fromPolicy = policyRoot();
     if (fromPolicy !== null) return { root: fromPolicy, source: "policy" };
-    if (memory !== undefined && memory !== null && typeof memory.lastSessionRoot === "string") return { root: memory.lastSessionRoot, source: "memory" };
     return { root: process.cwd(), source: "cwd" };
   }
   function rootFor(sessionId) { return describe(sessionId).root; }

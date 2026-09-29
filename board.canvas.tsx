@@ -29,7 +29,7 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-29",
-  revision: "r28",
+  revision: "r29",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -248,6 +248,7 @@ export const DATA = {
     { id: "a25", at: "2026-09-29", title: "canvas_new 把文件建到应用 cwd", tone: "danger", detail: "exec 里没有 agent 时 root 退到 process.cwd（Desktop = profile 目录）；改为多认几种 exec 形状 + 记住上次会话根", ref: "index.js toolRoot" },
     { id: "a26", at: "2026-09-29", taskId: "R-03", title: "重启后两处改动验证通过", tone: "success", detail: "相对路径落到工作区；gate:templates 新命令精确匹配成功、旧命令 denied；无 session 的 policy 括注也实测到了", ref: "R-03" },
     { id: "a27", at: "2026-09-29", taskId: "D-03", title: "preview 命名不再互相覆盖", tone: "success", detail: "改成按仓库相对路径派生；同名画布实测产出不同文件与不同内容；顺带补齐本仓看板缺失的锚点自检、并支持 nextAction=null", ref: "docs/preview/render.mjs" },
+    { id: "a28", at: "2026-09-29", title: "权威根阶梯：记住的工作区优先于 policy", tone: "success", detail: "实测 Desktop 的 policy 根是应用数据目录（profiles/desktop）；无 session 的写不再可能落进那里", ref: "index.js rootFor.describe" },
   ],
 } as const;
 

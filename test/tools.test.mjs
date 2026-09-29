@@ -218,11 +218,14 @@ if (readTool !== undefined) {
   assert.equal(rootFor(undefined), "/tmp/ws", "the last session root must outrank process.cwd()");
   assert.equal(memory.lastSessionRoot, "/tmp/ws");
   const policyOnly = makeRootResolver({ get: (name) => (name === "sandboxPolicy" ? { workspaceRoot: "/tmp/policy" } : undefined) }, { workspaceRoot: null }, {});
-  assert.equal(policyOnly(undefined), "/tmp/policy");
+  assert.equal(policyOnly(undefined), "/tmp/policy", "policy answers when no workspace has ever been seen");
+  const both = { get: (name) => (name === "sandboxPolicy" ? { workspaceRoot: "/tmp/policy" } : undefined) };
+  assert.equal(makeRootResolver(both, { workspaceRoot: null }, { lastSessionRoot: "/tmp/ws" })(undefined), "/tmp/ws",
+    "a workspace we have seen outranks the policy root: in Desktop the policy root is the app data directory");
   const configured = makeRootResolver({ get: () => undefined }, { workspaceRoot: "/tmp/config" }, {});
   assert.equal(configured(undefined), "/tmp/config", "config outranks everything");
   pass++;
-  console.log("ok   root precedence: config > session > policy > last session > cwd");
+  console.log("ok   root precedence: config > session > memory > policy > cwd");
 }
 
 await fs.rm(sessionDir, { recursive: true, force: true });
