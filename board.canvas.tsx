@@ -29,21 +29,21 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-28",
-  revision: "r19",
+  revision: "r20",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
   tasks: [
     {
       id: "V-01", lane: "verify", title: "重启后目视三张画布",
-      status: "in_progress", priority: "P0", owner: "human",
-      progress: 75, estimate: 1, actual: 0,
-      startedAt: "2026-09-28", updatedAt: "2026-09-29", completedAt: "", blocker: "",
+      status: "completed", priority: "P0", owner: "human",
+      progress: 100, estimate: 1, actual: 0,
+      startedAt: "2026-09-28", updatedAt: "2026-09-29", completedAt: "2026-09-29", blocker: "",
       goal: "确认套件在真实页面里渲染正确（含滚动、边距与排版修复）",
-      next: "在 Desktop 打开 board / gates / selfcheck，确认渲染为画布而非文本预览",
+      next: "",
       acceptance: "三张画布都渲染；控制台无 slot entry crashed",
-      evidence: "Desktop host 已激活：/canvas/api 200、canvas_check 可用、gate:templates exit=0", write: "lib/client.js",
-      ref: "DESIGN.md §25 §26", note: "host 半边已实测；client 半边待 UI 确认",
+      evidence: "人眼：Desktop 打开 board.canvas.tsx 渲染为画布；进程 code cache 含 dsh-app://app/plugins/@local/dsh-canvas/client.js", write: "lib/client.js",
+      ref: "DESIGN.md §25 §26", note: "host 与 client 两个半边都已在 Desktop 实测通过",
     },
     {
       id: "V-02", lane: "verify", title: "画布意图入口真实触发",
@@ -196,6 +196,7 @@ export const DATA = {
     { id: "a15", at: "2026-09-28", title: "意图入口不再被任务提交触发", tone: "success", detail: "按 source.rpcId 的 canvas-* 前缀过滤", ref: "host/intent.js" },
     { id: "a16", at: "2026-09-28", title: "画布改为单列纵向排列", tone: "success", detail: "模板 / 本仓画布 / patterns 与 kit 约定同步；不再左右分栏", ref: "skills/canvas/references/patterns.md" },
     { id: "a17", at: "2026-09-29", title: "插件在 DSH Desktop 上激活", tone: "success", detail: "装入 desktop profile 后重启：host 半边 200，四个工具可用，门禁 exit=0", ref: "profiles/desktop/package.json" },
+    { id: "a18", at: "2026-09-29", title: "client 半边确认渲染", tone: "success", detail: "board.canvas.tsx 在 Desktop 打开为画布；client bundle 走 dsh-app://app/plugins/<pkg>/client.js，不经 HTTP", ref: "skills/canvas/references/troubleshooting.md" },
   ],
 } as const;
 

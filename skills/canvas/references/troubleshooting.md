@@ -265,3 +265,28 @@ DESIGN §21 已经逐条裁决。下面是最终归属；排错时不要按旧�
 **产出方只有两个**：host（扫描 / 编译器 / 抽取 / `canvas_state_merge`）与 client（渲染期文案）。`canvas_check` 只看得到 host 的那部分。
 
 > `W_MANY_ROWS` 属于渲染期条件，与"编译期产生诊断"的主管线不同源。若希望它能被 `canvas_check` 捕获，需要额外做静态行数估算——目前没有。
+
+---
+
+## 在 Desktop 里验证安装（host / client 是两个半边）
+
+装进 profile 后**要重启应用**才生效，而且两个半边分开加载，验证方式不同：
+
+| 半边 | 怎么验 | 期望 |
+|---|---|---|
+| host | `GET /canvas/api` | 200 + `{"version":"1","actions":[…] }`；404 = host 没加载（没装 / 没重启） |
+| host | 直接调 `canvas_check` / `canvas_read` | 工具已注册，能返回数据 |
+| host | `POST /canvas/action {type:"runCommand"}` | 真实 `exitCode` |
+| client | **在应用里打开任意 `*.canvas.tsx`** | 渲染成画布；若是文本预览 = client 半边没加载 |
+
+**不要用 HTTP 探测 client bundle。** Desktop 的客户端模块走自定义协议 `dsh-app://app/plugins/<包名>/client.js`，不是 HTTP 路由——对 `/plugins/...` 发 HTTP 请求一律 404，**连官方插件也一样**，极易误判成"我们的没装上"。
+
+想知道渲染进程实际加载了哪些 client bundle，查 Chromium 的 V8 代码缓存（**只有执行过的脚本才会进这里**）：
+
+~~~powershell
+$ud = "$env:APPDATA\@deepseek-ai\dsh-desktop\Code Cache\js"
+Get-ChildItem $ud | Where-Object { [System.IO.File]::ReadAllText($_.FullName) -match "dsh-canvas" }
+~~~
+
+命中的文件里能看到 `dsh-app://app/plugins/@local/dsh-canvas/client.js`，与官方客户端插件排列在同一批 URL 中——这就是"client 半边已经在跑"的直接证据。
+
