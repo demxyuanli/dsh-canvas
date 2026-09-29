@@ -49,6 +49,14 @@ function numberOr(value, fallback) {
   return typeof value === "number" && isFinite(value) && value > 0 ? value : fallback;
 }
 
+/** First argument that is a non-empty string; undefined when none is. */
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value !== "") return value;
+  }
+  return undefined;
+}
+
 function serviceOf(ctx, name) {
   try { return ctx.get(name); } catch (error) { return undefined; }
 }
@@ -61,7 +69,7 @@ function serviceOf(ctx, name) {
  * uses. Config wins, then the Session, then the policy, then the process cwd.
  * @returns (sessionId) => root.
  */
-function makeRootResolver(ctx, config) {
+export function makeRootResolver(ctx, config, memory) {
   const cache = new Map();
   function policyRoot() {
     const policy = serviceOf(ctx, "sandboxPolicy");
@@ -87,11 +95,20 @@ function makeRootResolver(ctx, config) {
       if (found !== null) break;
     }
     cache.set(sessionId, found);
+    // Remember the last session root this plugin ever saw. The Desktop app runs
+    // with its profile directory as cwd, so a tool call whose exec context
+    // carries no session would otherwise resolve canvas paths there.
+    if (memory !== undefined && memory !== null && found !== null) memory.lastSessionRoot = found;
     return found;
   }
   return function rootFor(sessionId) {
     if (config.workspaceRoot !== null) return config.workspaceRoot;
-    return sessionRoot(sessionId) ?? policyRoot() ?? process.cwd();
+    const fromSession = sessionRoot(sessionId);
+    if (fromSession !== null) return fromSession;
+    const fromPolicy = policyRoot();
+    if (fromPolicy !== null) return fromPolicy;
+    if (memory !== undefined && memory !== null && typeof memory.lastSessionRoot === "string") return memory.lastSessionRoot;
+    return process.cwd();
   };
 }
 
@@ -528,12 +545,35 @@ async function templateFor(kind) {
   }
 }
 
-/** The workspace root for one tool call: the calling Session when known, else the policy. */
+/**
+ * The workspace root for one tool call.
+ *
+ * Precedence: a cwd carried directly by the exec context, then the calling
+ * Session resolved through the host services, then this plugin's config/policy,
+ * then the last Session root it has seen. @link{process.cwd} is the final resort
+ * only: in the Desktop app that is the profile directory, and resolving canvas
+ * paths there silently creates files outside the workspace.
+ */
 function toolRoot(state, exec) {
+  const context = exec === null || exec === undefined ? {} : exec;
   let sessionId;
+  let cwd;
   try {
-    if (exec && exec.agent) sessionId = exec.agent.session ? exec.agent.session.id : exec.agent.id;
-  } catch (error) { sessionId = undefined; }
+    const agent = context.agent;
+    const session = context.session;
+    cwd = firstString(
+      agent && agent.session ? agent.session.cwd : undefined,
+      session ? session.cwd : undefined,
+      context.cwd,
+    );
+    sessionId = firstString(
+      agent && agent.session ? agent.session.id : undefined,
+      session ? session.id : undefined,
+      agent ? agent.id : undefined,
+      context.sessionId,
+    );
+  } catch (error) { sessionId = undefined; cwd = undefined; }
+  if (cwd !== undefined) return cwd;
   return state.rootFor(sessionId);
 }
 
@@ -874,9 +914,13 @@ function registerIntentHook(ctx, config) {
 
 export function apply(ctx, rawConfig) {
   const config = resolveConfig(rawConfig);
+  // Shared with the root resolver: it records the last Session root so tool
+  // calls without a session do not fall back to the app's cwd.
+  const memory = {};
   const state = {
     config: config,
-    rootFor: makeRootResolver(ctx, config),
+    memory: memory,
+    rootFor: makeRootResolver(ctx, config, memory),
     store: new ModuleStore(),
     cooldown: new Map(),
   };
