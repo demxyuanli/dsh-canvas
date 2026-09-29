@@ -1,2 +1,6 @@
 node_modules/
 *.log
+
+# 本地草稿画布：canvas_new 建出来的起步副本，不进版本库。
+# 模板与真实看板分别在 skills/canvas/templates/ 与仓库既定位置（board / gates / examples）。
+/canvases/
