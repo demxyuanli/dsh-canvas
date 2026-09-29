@@ -2,7 +2,9 @@
  * title: Blank canvas
  * description: 最小可运行骨架：先改 DATA，再按需改渲染
  * icon: board
+ * hidden: true
  */
+// 模板不是活画布：canvas_new 复制时会剥掉上面那行 hidden，新建的画布照常可见。
 import {
   H1,
   Text,

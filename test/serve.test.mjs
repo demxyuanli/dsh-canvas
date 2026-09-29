@@ -51,6 +51,19 @@ const root = await fs.mkdtemp(path.join(os.tmpdir(), "canvas-root-"));
 const canvasPath = path.join(root, "specs", "demo.canvas.tsx");
 await fs.mkdir(path.dirname(canvasPath), { recursive: true });
 await fs.writeFile(canvasPath, CANVAS, "utf8");
+// A draft / retired canvas: on disk, out of the picker unless asked for.
+await fs.writeFile(path.join(root, "specs", "draft.canvas.tsx"), [
+  "/** @canvas",
+  " * title: Draft board",
+  " * hidden: true",
+  " */",
+  'import { Stack } from "dsh/canvas";',
+  "export const DATA = { tasks: [] } as const;",
+  "export default function Draft() {",
+  "  return <Stack />;",
+  "}",
+  "",
+].join("\n"), "utf8");
 
 // --- a ctx shim that behaves like the parts of the host the plugin uses ------
 // SessionController.prompt(request, signal): `mode` is a required field and the
@@ -140,6 +153,13 @@ await t("GET /canvas/list discovers the canvas with its metadata", async () => {
   assert.equal(r.body.canvases.length, 1);
   assert.equal(r.body.canvases[0].title, "Demo board");
   assert.equal(r.body.canvases[0].description, "host test fixture");
+});
+
+await t("a hidden canvas stays out of the picker unless it is asked for", async () => {
+  const shown = await getJson("/canvas/list");
+  assert.deepEqual(shown.body.canvases.map((c) => c.title), ["Demo board"], "the draft must not be listed");
+  const all = await getJson("/canvas/list?includeHidden=1");
+  assert.deepEqual(all.body.canvases.map((c) => c.title).sort(), ["Demo board", "Draft board"]);
 });
 
 await t("POST /canvas/compile returns a content-addressed module URL", async () => {

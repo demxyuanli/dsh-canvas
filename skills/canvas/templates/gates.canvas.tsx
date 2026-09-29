@@ -2,7 +2,9 @@
  * title: Gate dashboard
  * description: 一组可复现检查的通过情况，并可当场重跑
  * icon: board
+ * hidden: true
  */
+// 模板不是活画布：canvas_new 复制时会剥掉上面那行 hidden，新建的画布照常可见。
 import {
   H1,
   H2,

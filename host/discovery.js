@@ -45,6 +45,9 @@ export async function discoverCanvases(root, options = {}) {
       let source = "";
       try { source = await fs.readFile(full, "utf8"); } catch { continue; }
       const meta = readMetadata(source);
+      // A hidden canvas is a draft or a retired board: it stays in the repo but
+      // keeps out of the picker unless the caller asks for everything.
+      if (meta.meta.hidden === "true" && options.includeHidden !== true) continue;
       found.push({
         path: full,
         title: typeof meta.meta.title === "string" ? meta.meta.title : path.basename(entry.name, ".canvas.tsx"),

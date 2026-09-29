@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { compileCanvas } from "../host/compile.js";
+import { readMetadata } from "../host/discovery.js";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const corpus = [];
@@ -36,6 +37,11 @@ for (const file of corpus) {
     console.log("FAIL " + rel);
     for (const d of errors) console.log("     " + d.code + (d.line === undefined ? "" : " line " + d.line) + ": " + d.message);
     continue;
+  }
+  // A shipped template is not a live canvas: without the marker it would show up
+  // in every picker of every workspace that contains the plugin source.
+  if (rel.startsWith("skills/canvas/templates/")) {
+    assert.equal(readMetadata(source).meta.hidden, "true", rel + " must be marked hidden");
   }
   // The board is the tracking template: a thin row would silently undo the
   // detail/analysis it exists for, so the shape is part of the contract.

@@ -1345,6 +1345,32 @@ guide: [{ id: "workspace", commandId: "workspace.files", order: 10,
 
 **意图入口噪音**：点「开始」提交的任务带 `source.rpcId = "canvas-…"`，而 prompt 里含「画布」，于是 intake 指引被再次注入 —— 一个已经跟踪的任务被要求重新做 intake。修复：`userPlainText` 跳过 `rpcId` 以 `canvas-` 开头的消息（`startTurn` 铸的 id）。文本是自由格式，`rpcId` 才是可靠信号。回归：`test/intent.test.mjs` +2。
 
+## 30. 修订记录（续：实现审查 —— 信任边界、意图精度、画布生命周期）
+
+**背景**：一次 grill 式审查，先实测取证再动代码。三条实测发现：
+
+- **动作接口没有人管**：`POST /canvas/action` 用 `Content-Type: text/plain` + 伪造 `Origin: https://evil.example` 会被正常处理（表单编码同样）。它能 `startTurn`（把任意 prompt 塞进会话）、`runCommand`（白名单）、写 sidecar。
+- **路径能越出工作区**：`GET /canvas/overlay?canvas=../../../../Windows/win.ini` 被接受并解析到工作区外；同一套 `resolvePath` 也被 `canvas_new`（写）与 merge（回写）用着。
+- **宿主边界不覆盖插件路由**：`dsh-client-connection` 只守外壳/连接（根查询 token 换 cookie），`webServer.register` 签名是 `{kind, path, handler}`、无鉴权参数 —— 插件的特权面比应用自己的 UI 更宽。
+
+**逐条定案与落点**：
+
+| 决定 | 结论 | 落点 |
+|---|---|---|
+| 入口 | POST 只接受 `application/json`，否则 403 | `index.js` 入口 + INTERFACE §3.1 |
+| 路径 | **只钉写**、读放开；写越界即拒 | `resolveWritePath`（五处写调用点）；ADR 0001 |
+| 权威根 | config → 本请求 session → policy → 记住的上次会话根；落到 `process.cwd()` 写操作拒绝 | `rootFor.describe()` |
+| 意图精度 | 创建动词须**治理**到名词（中文 12 / 英文 24 字符窗口）+ 指代既有物的抑制 | `host/intent.js` |
+| 注入 | 985 → 845 字符：只留 7 问 + 指针，质量门槛不再复制（那份拷贝已漂移） | `buildCanvasIntakeGuidance` |
+| 生命周期 | 头部 `hidden: true` 不进 picker；`canvas_new` 剥掉该行 | `discovery.js` + `canvas_new` |
+
+**术语**：新增 `CONTEXT.md`（画布 / 看板 / 模板 / 实例 / 草稿 / 锚点 / overlay / 固化 / hidden）。
+
+**测试**：`serve.test.mjs` +3（非 JSON → 403 含假 Origin、越界写被拒且磁盘无残留、hidden 不进 list 而 `?includeHidden=1` 能列出）；`tools.test.mjs` +2（canvas_new/merge 越界 refused、无权威根 refused、新建画布不继承 hidden）；`intent.test.mjs` 重写匹配断言并把 12 条真实句子固化成「该/不该触发」两组；`templates.test.mjs` 断言模板都带 `hidden`。
+
+**未闭环**：host 侧改动需重启 Desktop 生效；重启后现场复核三项 —— 非 JSON → 403、越界写被拒、picker 从 7 张降到 3 张。
+
+
 
 
 

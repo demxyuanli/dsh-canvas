@@ -281,7 +281,10 @@ function createHandler(ctx, state) {
 
   async function handleList(req, res, url) {
     try {
-      const canvases = await discoverCanvases(requestRoot(state, url, null), { maxDepth: state.config.maxListDepth });
+      const canvases = await discoverCanvases(requestRoot(state, url, null), {
+        maxDepth: state.config.maxListDepth,
+        includeHidden: url.searchParams.get("includeHidden") === "1",
+      });
       sendJson(res, 200, { canvases: canvases });
     } catch (error) {
       sendJson(res, 200, { canvases: [], message: String(error && error.message ? error.message : error) });
@@ -613,14 +616,18 @@ async function templateFor(kind) {
 }
 
 /**
- * The workspace root for one tool call.
+ * Drop a `hidden: ...` line from a canvas metadata header.
  *
- * Precedence: a cwd carried directly by the exec context, then the calling
- * Session resolved through the host services, then this plugin's config/policy,
- * then the last Session root it has seen. @link{process.cwd} is the final resort
- * only: in the Desktop app that is the profile directory, and resolving canvas
- * paths there silently creates files outside the workspace.
+ * Only header lines match (the leading `*`), so a `hidden:` key inside DATA is
+ * untouched. Used by canvas_new: a new canvas is live by definition, so a marker
+ * inherited from a template must not make it invisible to the picker.
+ * @param source - canvas source, usually a template body.
+ * @returns the source without that line.
  */
+function stripHiddenMarker(source) {
+  return String(source).replace(/^([ \t]*\*[ \t]*)hidden[ \t]*:[^\n]*\n/m, "");
+}
+
 function cwdOf(exec) {
   const context = exec === null || exec === undefined ? {} : exec;
   try {
@@ -648,6 +655,15 @@ function sessionIdOf(exec) {
   } catch (error) { return undefined; }
 }
 
+/**
+ * The workspace root for one tool call.
+ *
+ * Precedence: a cwd carried directly by the exec context, then the calling
+ * Session resolved through the host services, then this plugin's config/policy,
+ * then the last Session root it has seen. @link{process.cwd} is the final resort
+ * only: in the Desktop app that is the profile directory, and resolving canvas
+ * paths there silently creates files outside the workspace.
+ */
 function toolRoot(state, exec) {
   const cwd = cwdOf(exec);
   if (cwd !== undefined) return cwd;
@@ -739,7 +755,10 @@ export function toolDefinitions(state) {
         return { path: typeof args.path === "string" ? args.path : "", summary: "refused: " + target.error, diagnostics: [] };
       }
       const abs = target.path;
-      const body = await templateFor(args.kind);
+      // A new canvas is live by definition, so a `hidden: true` inherited from the
+      // template header must not survive the copy - otherwise every board created
+      // from a hidden template would be born invisible to the picker.
+      const body = stripHiddenMarker(await templateFor(args.kind));
       await fs.mkdir(path.dirname(abs), { recursive: true });
       await fs.writeFile(abs, body, "utf8");
       const result = compileCanvas({ path: abs, source: body, limits: state.config.limits });

@@ -48,6 +48,7 @@ description: Use when the user asks for a project canvas, 看板, 画布, 画板
 - **内联只保留"当前窗口"**：未完成 + 最近完成的若干条。历史不该住在画布里。
 - **`note` / 描述类字段超过约 120 字就要改成引用**：写 `crates/occt-topo/src/brep_surface.rs:306` 或"见 t323"，不要把整段分析粘进来。粘贴是文件膨胀的唯一原因。
 - 触发软阈值（源码 128 KB / 1500 行 / `DATA` 512 KB）时会有 `W_LARGE_FILE` 警告——**把它当成必须处理的信号**，不是噪音。
+- **退休的画布标 `hidden: true`**：头部这个标记让草稿与已归档的看板留在仓库里，但不进 picker（`/canvas/list` 默认跳过，`?includeHidden=1` 才列）。`canvas_new` 复制模板时会剥掉这一行，所以新建的画布照常可见。
 
 ## 读画布不要全文读
 

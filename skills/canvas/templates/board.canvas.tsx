@@ -2,7 +2,9 @@
  * title: Task board
  * description: 任务跟踪看板：加权进度 + 风险派生 + 分组待办 + 富字段详情 + 活动时间线
  * icon: board
+ * hidden: true
  */
+// 模板不是活画布：canvas_new 复制时会剥掉上面那行 hidden，新建的画布照常可见。
 import {
   H1, H2, Text, Code, Stack, Grid, Row, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, TodoList, Pill, Button, Progress, KeyValue, Timeline,

@@ -9,6 +9,7 @@ import { makeRootResolver, toolDefinitions } from "../index.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { DEFAULT_LIMITS } from "../host/compile.js";
 import { writeOverlay, readOverlay } from "../host/overlay.js";
+import { readMetadata } from "../host/discovery.js";
 
 const state = { config: { limits: DEFAULT_LIMITS }, rootFor: () => process.cwd() };
 const options = toolDefinitions(state);
@@ -145,6 +146,8 @@ if (newTool !== undefined) {
     const inside = await newTool.execute({ path: "inside.canvas.tsx", kind: "blank" }, {});
     assert.equal(inside.path, path.join(dir, "inside.canvas.tsx"));
     assert.ok(inside.summary.startsWith("created "), inside.summary);
+    const createdSource = await fs.readFile(path.join(dir, "inside.canvas.tsx"), "utf8");
+    assert.equal(readMetadata(createdSource).meta.hidden, undefined, "a new canvas must not inherit the template's hidden marker");
     pass++;
     console.log("ok   canvas_new and canvas_state_merge stay inside the root");
   } catch (error) {
