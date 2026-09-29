@@ -74,7 +74,7 @@
 
 | 包 | 半边 | 职责 |
 |---|---|---|
-| `@local/dsh-canvas` | **host**（Node） | 编译（sucrase）、模块服务、画布发现、元数据与内联数据抽取、sidecar overlay 读写、动作桥、model 工具（`canvas_new/check/read`）、`Config` |
+| `@demxyuanli/dsh-canvas` | **host**（Node） | 编译（sucrase）、模块服务、画布发现、元数据与内联数据抽取、sidecar overlay 读写、动作桥、model 工具（`canvas_new/check/read`）、`Config` |
 | `@local/dsh-client-ui-canvas` | **browser** | `dsh/canvas` 套件实现、`sidebar.right` tab type、page kind、源码读取、动态 import 挂载、错误边界 |
 
 > 建议**同仓两个包**：host 半边需要 `sucrase` 依赖，client 半边必须零依赖，混在一起会把 sucrase 的打包面暴露给浏览器。但若只求最快落地，**单包 + `dsh.client` 声明**（`exports["./client"]`）也成立：P0 先单包，P1 再拆。
@@ -88,7 +88,7 @@
                      └───────────────┬────────────────┘
                                      │ 文件工具
                                      ▼
-┌──────────────────────── @local/dsh-canvas (host) ────────────────────────┐
+┌──────────────────────── @demxyuanli/dsh-canvas (host) ────────────────────────┐
 │  发现/watch → 读源码 → sucrase 编译 → 内容哈希 → 模块 URL                 │
 │  内联数据抽取（纯括号扫描，不执行代码，§11.3）                              │
 │  sidecar overlay 读写（.canvas/<name>.state.json）                        │
@@ -1139,7 +1139,7 @@ export default function StepObjRemaining() {
 - 插件在 `D:\source\repos\dsh-canvas\`（2026-09-28 从 `dogs/tools/dsh-canvas/` 迁出），已进 web profile：`dsh plugin --profile web add <dir>` 一次完成依赖安装 + bundle 选择（`link:`，改代码即生效）。宿主侧的 `link:` 与 `node_modules\@local\dsh-canvas` junction 已改指新目录。
 - host 半边**已在运行中的 GUI 上实测**：`/canvas/api`、`/compile`、`/module/<sha>.js`、`/source`、`/action`、overlay 全部 200 且行为正确。
 - 三套测试：`core 15/15`、`serve 13/13`（含「送出的模块能在 Node 里 import 并调用组件」）、`templates 4 compiled / 0 broken`。
-- 待办：**重启 GUI** 激活 client bundle（`/plugins/@local/dsh-canvas/client.js` 现为 404：运行中的页面在插件安装前已组合模块图）与工作区根解析修正。
+- 待办：**重启 GUI** 激活 client bundle（`/plugins/@demxyuanli/dsh-canvas/client.js` 现为 404：运行中的页面在插件安装前已组合模块图）与工作区根解析修正。
 
 ### 补充：DSH 工具 schema 的两条硬约束（实证）
 

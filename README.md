@@ -1,4 +1,4 @@
-# @local/dsh-canvas —— DeepSeek Harness 的项目看板插件
+# @demxyuanli/dsh-canvas —— DeepSeek Harness 的项目看板插件
 
 > **一个适配 DeepSeek Harness 的项目看板插件。** agent 把项目的审计结论与工程现状写成 `.canvas.tsx`，宿主（host 半边）实时编译并渲染到右栏，面板上的决定可以回流给 agent。
 
@@ -7,6 +7,24 @@
 - **harness 原生**：意图入口挂在 `agent/pre-step`；门禁执行走 `ctx.shell` 并按调用 Session 的 `ctx.sandboxPolicy` 约束；画布的「在会话里开始」走 `sessionController`；颜色与排版取自 harness 的 token，明暗主题自动跟随。
 - **对 agent 省 context**：`canvas_read` 只取切片（`dataPath` / `filter` / `ids` / `limit`），`canvas_state_merge` 把人的改动最小化写回源文件。
 - **可验收**：`npm test` → 8 个文件 / 94 断言；模板语料永远可编译。
+
+## 安装
+
+插件市场的实际形态就是 **npm 注册表**：在 Harness 侧栏的「插件」面板里粘贴下面这个 spec 即可 —— host 会先 `pnpm view` 读出它指向什么，再装进当前 profile：
+
+```
+@demxyuanli/dsh-canvas
+```
+
+等价的手工路径：
+
+```bash
+cd ~/.dsh/profiles/<profile>        # Windows: %USERPROFILE%\.dsh\profiles\<profile>
+pnpm add @demxyuanli/dsh-canvas
+# 再把 "@demxyuanli/dsh-canvas" 加进该 profile package.json 的 dsh.profile.bundles
+```
+
+装完**重启 Harness**：host 半边在启动时加载，浏览器半边按**包名**取 client bundle。开发本仓时用 `link:` 安装即可（`"@demxyuanli/dsh-canvas": "link:D:/source/repos/dsh-canvas"`），改完代码重启即生效。
 
 ## 是什么
 
@@ -74,7 +92,7 @@
 
 ~~~yaml
 - id: dsh-canvas
-  name: "@local/dsh-canvas"
+  name: "@demxyuanli/dsh-canvas"
   config:
     maxSourceBytes: 2097152
     commandWhitelist:
@@ -115,7 +133,7 @@
 | host (Node) | `index.js` + `host/` | 编译（sucrase）、内容寻址模块服务、画布发现与 watch、`DATA` 抽取、sidecar overlay 读写、动作桥、四个模型工具 |
 | browser | `client/` 源码 → 构建产物 `lib/client.js` | `dsh/canvas` 套件、`sidebar.right` tab type（认领 `*.canvas.tsx`）、源码读取、动态 `import()` 挂载、错误边界 |
 
-客户端模块注册 id **必须等于包名** `@local/dsh-canvas`；浏览器半边**只允许** `require("react")`，不得 require 任何 DSH client 包。
+客户端模块注册 id **必须等于包名** `@demxyuanli/dsh-canvas`；浏览器半边**只允许** `require("react")`，不得 require 任何 DSH client 包。
 
 关键链路：
 

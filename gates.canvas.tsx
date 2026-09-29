@@ -1,5 +1,5 @@
 /** @canvas
- * title: @local/dsh-canvas 门禁
+ * title: @demxyuanli/dsh-canvas 门禁
  * description: 两条真实门禁：全量测试与模板语料；Run 走真实 ctx.shell 并回传 exitCode
  * icon: board
  */
@@ -115,7 +115,7 @@ export default function GateDashboard() {
   return (
     <Stack gap={24}>
       <Stack gap={8}>
-        <H1>@local/dsh-canvas 门禁</H1>
+        <H1>@demxyuanli/dsh-canvas 门禁</H1>
         <Text tone="secondary">
           基线：<Code>{DATA.baseline}</Code>
         </Text>

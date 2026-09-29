@@ -1,5 +1,5 @@
 /** @canvas
- * title: @local/dsh-canvas 项目看板
+ * title: @demxyuanli/dsh-canvas 项目看板
  * description: 发布收口看板：真实环境验收 + 剩余缺口；进度与风险从 DATA 现算
  * icon: board
  */
@@ -27,9 +27,9 @@ type Task = {
 };
 
 export const DATA = {
-  goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
+  goal: "把 @demxyuanli/dsh-canvas 发布到 npm，让别人能在侧栏「插件」面板里按 spec 装上",
   asOf: "2026-09-29",
-  revision: "r29",
+  revision: "r30",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -50,8 +50,7 @@ export const DATA = {
     { id: "D5", at: "2026-09-28", chose: "startTurn 用 mode=queue + AbortSignal", rejected: ["mode=steer", "省略 signal"], why: "契约必填 signal；队列语义不抢占当前轮", ref: "DESIGN.md §27" },
   ],
   // 全局唯一的下一个动作。每任务的 next 是局部视角，两者不互相替代。
-  // 当前窗口内没有待办：所有条目都已关闭。null 是明确表态，不是「字段没写」。
-  nextAction: null,
+  nextAction: { taskId: "R-04", action: "你 npm login 后执行 npm publish --access public（包已就绪：元数据 / LICENSE / README 安装节 / profile 迁移都已完成）", why: "发布必须用你的账号 —— 本机 npm 未登录（ENEEDAUTH），这一步我替不了" },
   tasks: [
     {
       id: "V-01", lane: "verify", title: "重启后目视三张画布",
@@ -61,7 +60,7 @@ export const DATA = {
       goal: "确认套件在真实页面里渲染正确（含滚动、边距与排版修复）",
       next: "",
       acceptance: "三张画布都渲染；控制台无 slot entry crashed",
-      evidence: "人眼：Desktop 打开 board.canvas.tsx 渲染为画布；进程 code cache 含 dsh-app://app/plugins/@local/dsh-canvas/client.js", write: "lib/client.js",
+      evidence: "人眼：Desktop 打开 board.canvas.tsx 渲染为画布；进程 code cache 含 dsh-app://app/plugins/@demxyuanli/dsh-canvas/client.js", write: "lib/client.js",
       ref: "DESIGN.md §25 §26", note: "host 与 client 两个半边都已在 Desktop 实测通过",
     },
     {
@@ -209,6 +208,18 @@ export const DATA = {
       ref: "troubleshooting.md", note: "用白名单的 command 精确匹配判定生效命令：新命令 ok、旧命令『not in commandWhitelist』",
     },
     {
+      id: "R-04", lane: "release", title: "发布到 npm（插件市场的实际形态）",
+      status: "in_progress", priority: "P0", owner: "agent",
+      progress: 80, estimate: 2, actual: 2,
+      startedAt: "2026-09-29", updatedAt: "2026-09-29", completedAt: "", blocker: "需要你的 npm 账号：本机 npm 未登录（ENEEDAUTH）",
+      goal: "别人能在 Harness 侧栏的「插件」面板里用 @demxyuanli/dsh-canvas 装到这个插件",
+      next: "npm login → npm publish --access public",
+      acceptance: "npm view @demxyuanli/dsh-canvas 能读到 0.2.0；装到干净 profile 后 canvas tab 出现",
+      evidence: "实证：DSH 无自建市场（289 个官方包里没有任何发布命令），市场 = npm 注册表 + pnpm view/add；本包已是 bundle 形态（dsh.bundle.patch + dsh.client）；npm pack 28 文件 301KB 且含 LICENSE",
+      write: "package.json", ref: "README.md 安装节",
+      note: "改名 @local→@demxyuanli 涉及 30 处 + profile 两个文件 + pnpm 重装链接；@local 是宿主本地占位作用域，发不出去",
+    },
+    {
       id: "D-03", lane: "docs", title: "preview 脚本按 basename 命名会互相覆盖",
       status: "completed", priority: "P3", owner: "agent",
       progress: 100, estimate: 1, actual: 1,
@@ -249,6 +260,7 @@ export const DATA = {
     { id: "a26", at: "2026-09-29", taskId: "R-03", title: "重启后两处改动验证通过", tone: "success", detail: "相对路径落到工作区；gate:templates 新命令精确匹配成功、旧命令 denied；无 session 的 policy 括注也实测到了", ref: "R-03" },
     { id: "a27", at: "2026-09-29", taskId: "D-03", title: "preview 命名不再互相覆盖", tone: "success", detail: "改成按仓库相对路径派生；同名画布实测产出不同文件与不同内容；顺带补齐本仓看板缺失的锚点自检、并支持 nextAction=null", ref: "docs/preview/render.mjs" },
     { id: "a28", at: "2026-09-29", title: "权威根阶梯：记住的工作区优先于 policy", tone: "success", detail: "实测 Desktop 的 policy 根是应用数据目录（profiles/desktop）；无 session 的写不再可能落进那里", ref: "index.js rootFor.describe" },
+    { id: "a29", at: "2026-09-29", taskId: "R-04", title: "包改成可发布形态（改名 + 元数据 + LICENSE）", tone: "success", detail: "实证 DSH 无自建市场，市场 = npm 注册表；@local 发不出去、裸名 dsh-canvas 已被占用 → @demxyuanli/dsh-canvas；profile 已迁移并重装链接", ref: "package.json + LICENSE", },
   ],
 } as const;
 
@@ -401,7 +413,7 @@ export default function TaskBoard() {
   return (
     <Stack gap={24}>
       <Stack gap={10}>
-        <H1>@local/dsh-canvas 项目看板</H1>
+        <H1>@demxyuanli/dsh-canvas 项目看板</H1>
         <Text tone="secondary">{DATA.goal}</Text>
         <Text size="caption" tone="tertiary">
           快照 {DATA.asOf} · 修订 {DATA.revision} · 快照前 7 天完成 {recentDone.length} 条 · WIP 上限 {DATA.wipLimit}

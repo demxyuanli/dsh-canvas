@@ -5,8 +5,8 @@
 
 ## 1. 包
 
-- 包名 `@local/dsh-canvas`，单包双半：`index.js`（host）+ `lib/client.js`（browser）。
-- 客户端模块注册 id **必须等于包名**：`@local/dsh-canvas`。
+- 包名 `@demxyuanli/dsh-canvas`，单包双半：`index.js`（host）+ `lib/client.js`（browser）。
+- 客户端模块注册 id **必须等于包名**：`@demxyuanli/dsh-canvas`。
 - client 半边只允许 `require("react")`（平台模块表已预置），**不得** require 任何 DSH client 包。
 
 ## 2. 注入到浏览器的全局（动态 import 之前同步设置）

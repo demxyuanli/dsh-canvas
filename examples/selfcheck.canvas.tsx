@@ -20,7 +20,7 @@ export const DATA = {
     { id: "c2", title: "literal DATA extraction", status: "completed",
       host: "test/core.test.mjs", note: "15 assertions" },
     { id: "c3", title: "client bundle served and rendered by the GUI", status: "completed",
-      host: "/plugins/@local/dsh-canvas/client.js", note: "renders in the running page" },
+      host: "/plugins/@demxyuanli/dsh-canvas/client.js", note: "renders in the running page" },
     { id: "c4", title: "sidecar overlay round-trip", status: "completed",
       host: ".canvas/<stem>.state.json", note: "verified on disk" },
     { id: "c5", title: "human edits merge back into DATA", status: "completed",

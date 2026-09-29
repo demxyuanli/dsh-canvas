@@ -288,7 +288,7 @@ $ud = "$env:APPDATA\@deepseek-ai\dsh-desktop\Code Cache\js"
 Get-ChildItem $ud | Where-Object { [System.IO.File]::ReadAllText($_.FullName) -match "dsh-canvas" }
 ~~~
 
-命中的文件里能看到 `dsh-app://app/plugins/@local/dsh-canvas/client.js`，与官方客户端插件排列在同一批 URL 中——这就是"client 半边已经在跑"的直接证据。
+命中的文件里能看到 `dsh-app://app/plugins/@demxyuanli/dsh-canvas/client.js`，与官方客户端插件排列在同一批 URL 中——这就是"client 半边已经在跑"的直接证据。
 
 ---
 

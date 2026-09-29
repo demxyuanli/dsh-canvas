@@ -1,7 +1,6 @@
 {
-  "name": "@local/dsh-canvas",
+  "name": "@demxyuanli/dsh-canvas",
   "version": "0.2.0",
-  "private": true,
   "description": "DeepSeek Harness project-board plugin: agent-authored .canvas.tsx boards compiled and rendered live in the web GUI, with a host UI kit, action bridge, sidecar state, and agent-readable slices",
   "type": "module",
   "scripts": {
@@ -46,5 +45,30 @@
     "locale/",
     "icon.svg",
     "skills/"
-  ]
+  ],
+  "license": "MIT",
+  "author": "demxyuanli",
+  "homepage": "https://github.com/demxyuanli/dsh-canvas#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/demxyuanli/dsh-canvas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/demxyuanli/dsh-canvas/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "cordis-plugin",
+    "canvas",
+    "board",
+    "dashboard",
+    "tsx",
+    "project-board",
+    "kanban"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

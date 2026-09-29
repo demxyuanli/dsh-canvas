@@ -41,7 +41,7 @@ await import("../lib/client.js");
 
 t("registers one module under the package name", () => {
   assert.ok(captured, "client.js never called __ModuleLoader__.load");
-  assert.equal(captured.id, "@local/dsh-canvas");
+  assert.equal(captured.id, "@demxyuanli/dsh-canvas");
   assert.equal(typeof captured.factory, "function");
 });
 
