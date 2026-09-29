@@ -424,16 +424,34 @@ async function runCommand(ctx, state, body, action) {
     return { ok: false, code: "unsupported", message: "ctx.shell is not available in this composition" };
   }
   const sessionId = typeof body.sessionId === "string" && body.sessionId !== "" ? body.sessionId : (typeof action.sessionId === "string" ? action.sessionId : "");
+  // Where the confinement comes from is part of the result, not a footnote. A
+  // request with no resolvable session runs under the *deployment* default, and
+  // a panel that only sees sandbox.mode would read that as the caller's own
+  // policy - so the provenance travels back with the run.
   let sandboxPolicy;
+  let policySource = "deployment";
+  let policyReason = sessionId === ""
+    ? "the request carried no sessionId"
+    : "session " + sessionId + " is not known to this host";
   try {
-    const policy = serviceOf(ctx, "sandboxPolicy");
-    if (policy !== undefined && policy !== null && typeof policy.resolve === "function") {
+    const policyService = serviceOf(ctx, "sandboxPolicy");
+    if (policyService !== undefined && policyService !== null && typeof policyService.resolve === "function") {
       const session = sessionById(ctx, sessionId);
-      sandboxPolicy = session === undefined ? policy.resolve() : policy.resolve({ session: session });
+      if (session === undefined) {
+        sandboxPolicy = policyService.resolve();
+      } else {
+        sandboxPolicy = policyService.resolve({ session: session });
+        policySource = "session";
+        policyReason = "resolved from the calling session";
+      }
+    } else {
+      policyReason = "this composition has no sandboxPolicy service";
     }
   } catch (error) {
     sandboxPolicy = undefined;
+    policyReason = "sandbox policy resolution failed: " + String(error && error.message ? error.message : error);
   }
+  const policy = { source: policySource, sessionId: sessionId === "" ? null : sessionId, reason: policyReason };
   const workdir = typeof entry.cwd === "string" && entry.cwd !== "" ? entry.cwd : requestRoot(state, null, body);
   const timeoutMs = numberOr(entry.timeoutMs, 120000);
   try {
@@ -448,7 +466,8 @@ async function runCommand(ctx, state, body, action) {
       signal: result.signal === undefined ? null : result.signal,
       timedOut: result.timedOut === true,
       sandbox: result.sandbox,
-      detail: label + " exit=" + String(result.exitCode) + (result.timedOut === true ? " (timed out)" : ""),
+      policy: policy,
+      detail: label + " exit=" + String(result.exitCode) + (result.timedOut === true ? " (timed out)" : "") + (policySource === "session" ? "" : " (deployment sandbox policy: " + policyReason + ")"),
       stdout: tail(result.stdout === undefined ? "" : result.stdout.text, 8000),
       stderr: tail(result.stderr === undefined ? "" : result.stderr.text, 4000),
     };

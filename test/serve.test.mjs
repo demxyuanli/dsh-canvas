@@ -332,6 +332,9 @@ await t("runCommand runs a whitelisted entry under the calling session's policy 
   assert.equal(policyCalls[0].session, SESSION, "the calling session must be resolved, not the deployment fallback");
   assert.equal(shellCalls[0].sandboxPolicy.mode, "read-only", "the session policy must reach the executor");
   assert.equal(r.body.sandbox.mode, "read-only", "V-04: a read-only session must report sandbox.mode read-only");
+  assert.equal(r.body.policy.source, "session", "V-05: a resolved session must be named as the policy source");
+  assert.equal(r.body.policy.sessionId, "s1");
+  assert.doesNotMatch(r.body.detail, /deployment sandbox policy/, "a session run needs no fallback footnote");
 });
 
 await t("an unknown session falls back to the deployment policy", async () => {
@@ -342,6 +345,22 @@ await t("an unknown session falls back to the deployment policy", async () => {
   assert.deepEqual(policyCalls, [undefined], "an unknown session must not be passed to resolve");
   assert.equal(shellCalls[0].sandboxPolicy.mode, "workspace-write");
   assert.equal(r.body.sandbox.mode, "workspace-write");
+  // V-05: the fallback stays permissive (the button keeps working) but says so,
+  // so the panel cannot read the deployment default as the caller's own policy.
+  assert.equal(r.body.policy.source, "deployment");
+  assert.equal(r.body.policy.sessionId, "ghost");
+  assert.match(r.body.policy.reason, /not known to this host/);
+  assert.match(r.body.detail, /deployment sandbox policy/);
+});
+
+await t("a request with no sessionId reports the deployment policy too", async () => {
+  shellCalls.length = 0;
+  policyCalls.length = 0;
+  const r = await post2("/canvas/action", { canvas: "specs/demo.canvas.tsx", action: { type: "runCommand", id: "gate:demo" } });
+  assert.equal(r.body.ok, true, JSON.stringify(r.body));
+  assert.equal(r.body.policy.source, "deployment");
+  assert.equal(r.body.policy.sessionId, null, "no sessionId must be reported as null, not as a phantom id");
+  assert.match(r.body.policy.reason, /carried no sessionId/);
 });
 
 await t("runCommand refuses an id that no whitelist entry has", async () => {

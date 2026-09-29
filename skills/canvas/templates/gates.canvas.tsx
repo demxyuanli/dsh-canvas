@@ -106,10 +106,12 @@ export default function GateDashboard() {
       return;
     }
     // 动作成功 != 门禁通过：退出码才是结果，红门禁必须红着显示。
+    // V-05：策略取不到调用方会话时仍会执行，但必须说出来，别让人以为那是自己的策略。
+    const scope = r.policy !== undefined && r.policy.source === "deployment" ? "（部署默认策略：未取到调用方会话）" : "";
     await dispatch({
       type: "notify",
       tone: r.exitCode === 0 ? "success" : "warning",
-      message: g.id + " exit=" + String(r.exitCode) + (r.timedOut === true ? "（超时）" : ""),
+      message: g.id + " exit=" + String(r.exitCode) + (r.timedOut === true ? "（超时）" : "") + scope,
     });
   };
 
@@ -118,17 +120,19 @@ export default function GateDashboard() {
     // 顺序执行：门禁通常是重命令（编译 / 对拍），并发触发会互相抢资源。
     let denied = 0;
     let failed = 0;
+    let fellBack = 0;
     for (const g of gates) {
       const r = await dispatch({ type: "runCommand", id: g.runId });
       if (!r.ok) denied += 1;
       else if (r.exitCode !== 0) failed += 1;
+      if (r.policy !== undefined && r.policy.source === "deployment") fellBack += 1;
     }
     await dispatch({
       type: "notify",
       tone: denied > 0 || failed > 0 ? "warning" : "info",
-      message: denied > 0 || failed > 0
+      message: (denied > 0 || failed > 0
         ? String(denied) + " 条未执行（白名单 / 权限），" + String(failed) + " 条非零退出"
-        : "全部门禁退出码为 0",
+        : "全部门禁退出码为 0") + (fellBack > 0 ? "（" + String(fellBack) + " 条用了部署默认策略）" : ""),
     });
   };
 

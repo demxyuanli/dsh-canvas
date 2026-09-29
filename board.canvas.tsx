@@ -29,7 +29,7 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-29",
-  revision: "r24",
+  revision: "r25",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -50,7 +50,7 @@ export const DATA = {
     { id: "D5", at: "2026-09-28", chose: "startTurn 用 mode=queue + AbortSignal", rejected: ["mode=steer", "省略 signal"], why: "契约必填 signal；队列语义不抢占当前轮", ref: "DESIGN.md §27" },
   ],
   // 全局唯一的下一个动作。每任务的 next 是局部视角，两者不互相替代。
-  nextAction: { taskId: "V-05", action: "裁决无 Session 时 runCommand 的兜底：拒绝执行还是显式回落，并写进 INTERFACE §4.1", why: "V-04 的沙箱结论已到手，它是唯一还开着的任务" },
+  nextAction: { taskId: "R-03", action: "重启 Desktop，在 gates 画布点一次 Run，确认 gate:templates 生效的是新命令且 exit=0", why: "V-05 已裁决；这是唯一还开着的验证项" },
   tasks: [
     {
       id: "V-01", lane: "verify", title: "重启后目视三张画布",
@@ -87,15 +87,15 @@ export const DATA = {
     },
     {
       id: "V-05", lane: "verify", title: "无 Session 时 runCommand 的兜底",
-      status: "pending", priority: "P2", owner: "-",
-      progress: 0, estimate: 1, actual: 0,
-      startedAt: "", updatedAt: "2026-09-28", completedAt: "", blocker: "",
+      status: "completed", priority: "P2", owner: "agent",
+      progress: 100, estimate: 1, actual: 1,
+      startedAt: "2026-09-29", updatedAt: "2026-09-29", completedAt: "2026-09-29", blocker: "",
       dependsOn: ["V-04"],
       goal: "没有调用方 Session 时，沙箱策略与工作区根应该怎么取",
-      next: "裁决：拒绝执行（要求 session）还是显式回落；写进 INTERFACE §4.1",
+      next: "",
       acceptance: "行为有明确文档与用例",
-      evidence: "实测：无 session 时 policy.resolve() 走部署默认 → workspace-write，命令照跑", write: "index.js",
-      ref: "INTERFACE.md §4.1", note: "现状是「静默用部署默认」：既不拒绝也没有提示；面板总会带 sessionId，所以不影响按钮",
+      evidence: "INTERFACE §4.1 记形状与三种回落原因；serve 测试三条用例（session / deployment / 无 sessionId）；面板 notify 带括注", write: "index.js + gates.canvas.tsx",
+      ref: "INTERFACE.md §4.1", note: "裁决：不拒绝、不改执行，只把 policy.source 与 reason 作为事实返回，由画布提示",
     },
     {
       id: "V-04", lane: "verify", title: "read-only 会话下的沙箱行为",
@@ -196,6 +196,17 @@ export const DATA = {
       evidence: "-", write: "board.canvas.tsx",
       ref: "DESIGN.md §17 P5", note: "这张画布已经是那张看板；本仓没有 _board.md",
     },
+    {
+      id: "R-03", lane: "release", title: "重启后确认 gate:templates 用新命令",
+      status: "pending", priority: "P2", owner: "-",
+      progress: 0, estimate: 1, actual: 0,
+      startedAt: "", updatedAt: "2026-09-29", completedAt: "", blocker: "",
+      goal: "read-only 会话里 templates 这条门禁也能给出真实退出码（node --test 会 EPERM）",
+      next: "重启 Desktop，在 gates 画布点一次 Run：确认 detail 不带 deployment 括注且 exit=0",
+      acceptance: "gates 画布 Run 返回 exit=0，生效命令为 node test/templates.test.mjs",
+      evidence: "profile patch 已改（下次重启生效）", write: "profiles/*/cordis.patch.yml",
+      ref: "troubleshooting.md", note: "运行中的 host 仍是旧命令；desktop 与 web 两份 profile 都已改",
+    },
   ],
   activity: [
     { id: "a1", at: "2026-09-28", title: "意图入口在真实会话里触发", tone: "success", detail: "用户发「给我建个项目看板」→ host 注入 intake", ref: "host/intent.js" },
@@ -221,6 +232,7 @@ export const DATA = {
     { id: "a21", at: "2026-09-29", title: "V-05 现状取证", tone: "info", detail: "无 session 时走部署默认 → workspace-write 静默执行，既不拒绝也无提示", ref: "index.js:432" },
     { id: "a22", at: "2026-09-29", title: "V-04 验收通过（live read-only）", tone: "success", detail: "切 preset 后 sandbox.mode=read-only、denied=false；顺带查清 read-only 下 node --test 因 spawn 管道被拒，node <file> 可跑", ref: "test/serve.test.mjs" },
     { id: "a23", at: "2026-09-29", title: "摘要自检抓到自己造的漂移", tone: "warning", detail: "V-04 完成后 nextAction 仍指它；brief 只查了 taskId 存在性，补上「指向已关闭行」的报警", ref: "host/brief.js" },
+    { id: "a24", at: "2026-09-29", title: "V-05 裁决：显式回落", tone: "success", detail: "runCommand 结果新增 policy{source,sessionId,reason}；仍按部署默认执行但面板会括注；三条用例 + INTERFACE §4.1", ref: "INTERFACE.md §4.1" },
   ],
 } as const;
 

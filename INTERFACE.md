@@ -67,12 +67,16 @@ host 用 `webServer.register({ kind: "prefix", path: "/canvas", handler })` 注�
 
 ~~~ts
 { ok: true, code: "ran", exitCode: number | null, signal: string | null, timedOut: boolean,
-  sandbox?: { mode, denied, enforcement?, runnerFailed? }, detail: string,
-  stdout: string, stderr: string }   // stdout / stderr 是截断后的尾部（8 KB / 4 KB）
+  sandbox?: { mode, denied, enforcement?, runnerFailed? },
+  policy: { source: "session" | "deployment", sessionId: string | null, reason: string },
+  detail: string, stdout: string, stderr: string }   // stdout / stderr 是截断后的尾部（8 KB / 4 KB）
 ~~~
 
 - 命令字符串**永远取自 Config 白名单项**；请求只能按 `id` 或完整命令逐字**选中**一项，不能改写它（请求里同时带 `id` 与不相干的 `command` 时以命中项为准）。
-- 执行经 `ctx.shell`（`resolve` → `execute` → `result`），并按调用 Session 的 `ctx.sandboxPolicy.resolve({ session })` 得到的策略做沙箱约束；取不到 Session 时用部署默认策略。
+- 执行经 `ctx.shell`（`resolve` → `execute` → `result`），沙箱策略来自调用 Session 的 `ctx.sandboxPolicy.resolve({ session })`，作为 `request.sandboxPolicy` 交给执行器（`dsh-pwsh-sandbox` 的 `resolve` 认这个字段，缺省才自己回退部署默认）。
+- **兜底是显式的**（V-05 裁决）：请求没带 `sessionId`、或该 id 在本 host 上查不到时，**仍按部署默认策略执行**（不拒绝，按钮照常可用），但结果必须带 `policy.source: "deployment"` + `policy.reason`，并在 `detail` 末尾括注——面板不能把部署默认读成调用方自己的策略。
+  - `policy.source` 只有两个取值：`session`（解析到调用方）/ `deployment`（其余全部情形）；
+  - 三种回落原因写在 `policy.reason` 里：请求未带 `sessionId`、`sessionId` 在本 host 查不到、本组合没有 `sandboxPolicy` 服务（解析抛错时 reason 带原文）。
 - 未登记 → `{ ok:false, code:"denied" }`；白名单为空 → `{ ok:false, code:"unsupported" }`；`ctx.shell` 缺失 → `{ ok:false, code:"unsupported" }`；准备 / 启动失败 → `{ ok:false, code:"failed" }`。
 
 ## 5. 套件（`dsh/canvas`）导出面
