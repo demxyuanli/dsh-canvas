@@ -14,8 +14,13 @@
  * lifted from the harness checkout. Point DSH_CHECKOUT at it, or let the script
  * discover the npx cache.
  *
- * Usage:  node docs/preview/render.mjs board.canvas.tsx gates.canvas.tsx
- * Output: docs/preview/<stem>.html   (open it, or screenshot it)
+ * Usage:  node docs/preview/render.mjs board.canvas.tsx examples/selfcheck.canvas.tsx
+ * Output: docs/preview/<stem>[-dark].html   (open it, or screenshot it)
+ *
+ * The stem is the canvas path relative to the repo root, separators folded to
+ * dashes: examples/selfcheck.canvas.tsx -> examples-selfcheck. Naming by basename
+ * alone let two same-named canvases in different directories overwrite each
+ * other's preview and screenshot, silently.
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -140,12 +145,27 @@ async function loadKit() {
   return globalThis.__DSH_CANVAS__;
 }
 
+/**
+ * Output stem for one canvas: repo-relative path, separators folded to dashes.
+ * Paths outside the repo fall back to the basename; either way the result is
+ * unique per source file, which is what stops the silent overwrite.
+ * @param abs - Absolute canvas path.
+ * @returns The stem, without the `-dark` suffix and without `.canvas.tsx`.
+ */
+function stem(abs) {
+  const rel = path.relative(ROOT, abs);
+  const inside = rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+  const reference = inside ? rel : path.basename(abs);
+  return reference.replace(/\.canvas\.tsx$/, "").split(/[\\/]+/).filter((part) => part !== "").join("-");
+}
+
 async function renderOne(kit, reference, themeCss) {
   const abs = path.resolve(ROOT, reference);
   const source = await fs.readFile(abs, "utf8");
   const compiled = compileCanvas({ path: abs, source });
   if (!compiled.ok) throw new Error("canvas did not compile: " + reference + "\n" + JSON.stringify(compiled.diagnostics, null, 2));
-  const tmp = path.join(HERE, ".render-" + path.basename(abs, ".tsx") + ".mjs");
+  const name = stem(abs);
+  const tmp = path.join(HERE, ".render-" + name + "-" + Date.now() + ".mjs");
   await fs.writeFile(tmp, compiled.code, "utf8");
   const mod = await import(pathToFileURL(tmp).href + "?v=" + Date.now());
   await fs.rm(tmp, { force: true });
@@ -155,7 +175,7 @@ async function renderOne(kit, reference, themeCss) {
   const html = [
     "<!doctype html>",
     '<html lang="zh"><head><meta charset="utf-8">',
-    "<title>" + esc(path.basename(abs)) + "</title>",
+    "<title>" + esc(name) + "</title>",
     "<style>",
     themeCss,
     DARK ? "html{color-scheme:dark;}" : "",
@@ -167,7 +187,7 @@ async function renderOne(kit, reference, themeCss) {
     "</body></html>",
     "",
   ].join("\n");
-  const out = path.join(HERE, path.basename(abs).replace(/\.canvas\.tsx$/, "") + (DARK ? "-dark" : "") + ".html");
+  const out = path.join(HERE, name + (DARK ? "-dark" : "") + ".html");
   await fs.writeFile(out, html, "utf8");
   return { out, bytes: html.length, title };
 }

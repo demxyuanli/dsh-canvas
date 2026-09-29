@@ -213,13 +213,21 @@ export default function TaskBoard() {
     return age !== null && age <= 7;
   });
 
+  // nextAction 为 null 是明确表态「当前没有待办」；缺字段才是没写。两者在渲染上都要
+  // 有东西可看，所以这里归一化成一个总能渲染的对象。
+  const nextAction = DATA.nextAction ?? {
+    taskId: "—",
+    action: "没有待办：当前窗口内的条目都已关闭",
+    why: "有新任务时补进 tasks，并把 nextAction 指过去",
+  };
+
   const risks: string[] = [];
   if (blocked.length > 0) risks.push(blocked.length + " 条阻塞：" + blocked.map((task) => task.id).join("、"));
   if (wip.length > DATA.wipLimit) risks.push("在办 " + wip.length + " 条，超过 WIP 上限 " + DATA.wipLimit);
   if (stale.length > 0) risks.push(stale.length + " 条超过 " + DATA.staleDays + " 天未更新：" + stale.map((task) => task.id).join("、"));
   if (overrun.length > 0) risks.push(overrun.length + " 条实际已超出估算：" + overrun.map((task) => task.id).join("、"));
   // 锚点自检：截断后 agent 会先信这三块，所以它们指向的东西必须存在
-  if (!tasks.some((task) => task.id === DATA.nextAction.taskId)) {
+  if (DATA.nextAction !== null && !tasks.some((task) => task.id === DATA.nextAction.taskId)) {
     risks.push("nextAction 指向不存在的任务：" + DATA.nextAction.taskId);
   }
   const premature = wip.filter((task) => (task.dependsOn ?? []).some((id) => {
@@ -300,9 +308,9 @@ export default function TaskBoard() {
       )}
 
       {/* 全局唯一的下一个动作：截断后第一眼要看到的就是它 */}
-      <Callout tone="info" title={"现在该做：" + DATA.nextAction.action}>
+      <Callout tone={DATA.nextAction === null ? "success" : "info"} title={"现在该做：" + nextAction.action}>
         <Text size="small">
-          对应 <Code>{DATA.nextAction.taskId}</Code>：{DATA.nextAction.why}
+          对应 <Code>{nextAction.taskId}</Code>：{nextAction.why}
         </Text>
       </Callout>
 

@@ -316,4 +316,18 @@ EPERM ... syscall: 'spawn'
 
 > Windows 上还可能看到 stderr 里有 GBK 乱码的 `InvalidOperation`，同时 `sandbox.enforcement` 为 `partial`：那是沙箱包装器给工作区授 ACL 失败后**降级继续**，命令本身照跑，与插件无关。
 
+---
+
+## canvas_check 通过了，但一 import 就崩
+
+`canvas_check` 只做**语法转换**（sucrase 剥类型），不做链接。下面这类问题它看不见，只有真正 import 画布时才炸：
+
+| 症状 | 例子 |
+|---|---|
+| `SyntaxError: Identifier 'X' has already been declared` | 同一作用域里写了两次 `const nextUp = …`（粘代码时最容易发生） |
+| `ReferenceError: Cannot access 'X' before initialization` | 在声明之前使用（TDZ） |
+
+**改完画布一定要渲染一次**（`docs/preview/render.mjs`，或直接打开 tab）。SKILL.md 里那句「`canvas_check` 通过不等于渲染正确」说的就是这件事：编译诊断覆盖语法、非法 import、`DATA` 不纯与体积，覆盖不了作用域与链接。
+
+
 

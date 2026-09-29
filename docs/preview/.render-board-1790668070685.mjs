@@ -1,32 +1,41 @@
-/** @canvas
+const __C = globalThis.__DSH_CANVAS__;
+if (!__C) { throw new Error("DSH canvas runtime is not installed"); }
+const __require = function (id) {
+  if (id === "dsh/canvas") return __C;
+  if (id === "react") return __C.React;
+  throw new Error("canvas may not require " + id);
+};
+const __module = { exports: {} };
+(function (require, exports, module, __DSH_CANVAS__) {
+"use strict";Object.defineProperty(exports, "__esModule", {value: true}); function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } }/** @canvas
  * title: @local/dsh-canvas 项目看板
  * description: 发布收口看板：真实环境验收 + 剩余缺口；进度与风险从 DATA 现算
  * icon: board
  */
-import {
-  H1, H2, Text, Code, Stack, Grid, Row, Divider, Card, CardBody, CardHeader,
-  Callout, Stat, Table, TodoList, Pill, Button, Progress, KeyValue, Timeline,
-  CollapsibleSection, useMemo, useCanvasState, useCanvasOverlay, useCanvasAction,
-} from "dsh/canvas";
 
-type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
-type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 
-// 每个条目带的是"跟踪所需的字段"，不是只有标题与状态：
-//   status / progress / estimate / actual  -> 到哪一步、还要多少
-//   startedAt / updatedAt / completedAt    -> 停了多久、多久没动过
-//   blocker / next / acceptance            -> 卡在哪、下一步、怎样算完成
-//   evidence / write / ref                 -> 结论的证据、改动位置、参考
-// 这张画布只保留"当前窗口"（在办 + 最近完成）；更早的历史属于另一个文件。
-type Task = {
-  id: string; lane: string; title: string; status: Status; priority: string;
-  owner: string; progress: number; estimate: number; actual: number;
-  startedAt: string; updatedAt: string; completedAt: string; blocker: string;
-  goal: string; next: string; acceptance: string; evidence: string;
-  write: string; ref: string; note: string;
-};
 
-export const DATA = {
+
+var _canvas = require('dsh/canvas');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-29",
   revision: "r28",
@@ -249,9 +258,9 @@ export const DATA = {
     { id: "a26", at: "2026-09-29", title: "重启后两处改动验证通过", tone: "success", detail: "相对路径落到工作区；gate:templates 新命令精确匹配成功、旧命令 denied；无 session 的 policy 括注也实测到了", ref: "R-03" },
     { id: "a27", at: "2026-09-29", title: "preview 命名不再互相覆盖", tone: "success", detail: "改成按仓库相对路径派生；同名画布实测产出不同文件与不同内容；顺带补齐本仓看板缺失的锚点自检、并支持 nextAction=null", ref: "docs/preview/render.mjs" },
   ],
-} as const;
+} ; exports.DATA = DATA;
 
-const STATUS_TONE: Record<string, Tone> = {
+const STATUS_TONE = {
   pending: "neutral",
   in_progress: "warning",
   blocked: "danger",
@@ -259,7 +268,7 @@ const STATUS_TONE: Record<string, Tone> = {
   cancelled: "neutral",
 };
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL = {
   pending: "待办",
   in_progress: "进行中",
   blocked: "阻塞",
@@ -267,43 +276,43 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "取消",
 };
 
-const PRIORITY_TONE: Record<string, Tone> = { P0: "danger", P1: "warning", P2: "neutral" };
+const PRIORITY_TONE = { P0: "danger", P1: "warning", P2: "neutral" };
 
 const DAY_MS = 86400000;
 
-function statusOf(row: { status?: string }): Status {
+function statusOf(row) {
   const s = row.status;
   return s === "pending" || s === "in_progress" || s === "blocked" || s === "completed" || s === "cancelled" ? s : "pending";
 }
 
-function isOpen(task: Task): boolean {
+function isOpen(task) {
   return task.status === "pending" || task.status === "in_progress" || task.status === "blocked";
 }
 
-function progressOf(task: Task): number {
+function progressOf(task) {
   return task.status === "completed" ? 100 : task.progress;
 }
 
-function priorityRank(priority: string): number {
+function priorityRank(priority) {
   return priority === "P0" ? 0 : priority === "P1" ? 1 : 2;
 }
 
-function daysBetween(from: string, to: string): number | null {
+function daysBetween(from, to) {
   const a = Date.parse(from);
   const b = Date.parse(to);
   if (Number.isNaN(a) || Number.isNaN(b)) return null;
   return Math.round((b - a) / DAY_MS);
 }
 
-export default function TaskBoard() {
-  const dispatch = useCanvasAction();
+ function TaskBoard() {
+  const dispatch = _canvas.useCanvasAction.call(void 0, );
   // 筛选器与当前选中项是纯 UI 态：agent 不需要知道，刷新后保留即可。
-  const [filter, setFilter] = useCanvasState<string>("filter", "open");
-  const [activeId, setActiveId] = useCanvasState<string>("active", "T-01");
+  const [filter, setFilter] = _canvas.useCanvasState("filter", "open");
+  const [activeId, setActiveId] = _canvas.useCanvasState("active", "T-01");
   // 人的状态改动必须走 overlay：它落在 sidecar 里，agent 下一轮 canvas_read 就能看到。
-  const overlay = useCanvasOverlay("tasks", DATA.tasks);
+  const overlay = _canvas.useCanvasOverlay.call(void 0, "tasks", exports.DATA.tasks);
 
-  const tasks = useMemo(
+  const tasks = _canvas.useMemo.call(void 0, 
     () => overlay.items.map((row) => ({ ...row, status: statusOf(row) })),
     [overlay.items],
   );
@@ -320,36 +329,39 @@ export default function TaskBoard() {
   const progressPct = estTotal === 0 ? 0 : Math.round(weighted / estTotal);
   const overrun = counted.filter((task) => task.actual > task.estimate);
   const stale = open.filter((task) => {
-    const age = daysBetween(task.updatedAt, DATA.asOf);
-    return age !== null && age > DATA.staleDays;
+    const age = daysBetween(task.updatedAt, exports.DATA.asOf);
+    return age !== null && age > exports.DATA.staleDays;
   });
   const recentDone = done.filter((task) => {
-    const age = task.completedAt === "" ? null : daysBetween(task.completedAt, DATA.asOf);
+    const age = task.completedAt === "" ? null : daysBetween(task.completedAt, exports.DATA.asOf);
     return age !== null && age <= 7;
   });
 
   // nextAction 为 null 是明确表态「当前没有待办」；缺字段才是没写。两者在渲染上都要
   // 有东西可看，所以这里归一化成一个总能渲染的对象。
-  const nextAction = DATA.nextAction ?? {
+  const nextAction = _nullishCoalesce(exports.DATA.nextAction, () => ( {
     taskId: "—",
     action: "没有待办：当前窗口内的条目都已关闭",
     why: "有新任务时补进 tasks，并把 nextAction 指过去",
-  };
+  }));
 
-  const risks: string[] = [];
+  const risks = [];
   if (blocked.length > 0) risks.push(blocked.length + " 条阻塞：" + blocked.map((task) => task.id).join("、"));
-  if (wip.length > DATA.wipLimit) risks.push("在办 " + wip.length + " 条，超过 WIP 上限 " + DATA.wipLimit);
-  if (stale.length > 0) risks.push(stale.length + " 条超过 " + DATA.staleDays + " 天未更新：" + stale.map((task) => task.id).join("、"));
+  if (wip.length > exports.DATA.wipLimit) risks.push("在办 " + wip.length + " 条，超过 WIP 上限 " + exports.DATA.wipLimit);
+  if (stale.length > 0) risks.push(stale.length + " 条超过 " + exports.DATA.staleDays + " 天未更新：" + stale.map((task) => task.id).join("、"));
   if (overrun.length > 0) risks.push(overrun.length + " 条实际已超出估算：" + overrun.map((task) => task.id).join("、"));
   // 锚点自检：截断后 agent 会先信这三块，所以它们指向的东西必须存在
-  if (DATA.nextAction !== null && !tasks.some((task) => task.id === DATA.nextAction.taskId)) {
-    risks.push("nextAction 指向不存在的任务：" + DATA.nextAction.taskId);
+  if (exports.DATA.nextAction !== null && !tasks.some((task) => task.id === exports.DATA.nextAction.taskId)) {
+    risks.push("nextAction 指向不存在的任务：" + exports.DATA.nextAction.taskId);
   }
-  const premature = wip.filter((task) => (task.dependsOn ?? []).some((id) => {
+  const premature = wip.filter((task) => (_nullishCoalesce(task.dependsOn, () => ( []))).some((id) => {
     const dependency = tasks.find((candidate) => candidate.id === id);
     return dependency === undefined || dependency.status !== "completed";
   }));
   if (premature.length > 0) risks.push(premature.length + " 条在依赖未完成时已开工：" + premature.map((task) => task.id).join("、"));
+
+  const nextUp = open
+    .slice()
 
   const nextUp = open
     .slice()
@@ -363,10 +375,10 @@ export default function TaskBoard() {
           : filter === "open" ? open
             : tasks.filter((task) => task.lane === filter);
 
-  const active = tasks.find((task) => task.id === activeId) ?? nextUp[0] ?? tasks[0];
-  const activeAge = active === undefined ? null : daysBetween(active.updatedAt, DATA.asOf);
+  const active = _nullishCoalesce(_nullishCoalesce(tasks.find((task) => task.id === activeId), () => ( nextUp[0])), () => ( tasks[0]));
+  const activeAge = active === undefined ? null : daysBetween(active.updatedAt, exports.DATA.asOf);
 
-  const startTurn = (task: Task) => dispatch({
+  const startTurn = (task) => dispatch({
     type: "startTurn",
     prompt:
       "处理 " + task.id + "：" + task.title +
@@ -382,68 +394,68 @@ export default function TaskBoard() {
   });
 
   return (
-    <Stack gap={24}>
-      <Stack gap={10}>
-        <H1>@local/dsh-canvas 项目看板</H1>
-        <Text tone="secondary">{DATA.goal}</Text>
-        <Text size="caption" tone="tertiary">
-          快照 {DATA.asOf} · 修订 {DATA.revision} · 快照前 7 天完成 {recentDone.length} 条 · WIP 上限 {DATA.wipLimit}
-        </Text>
-        <Progress
-          value={progressPct}
-          showValue
-          label={"加权进度（按估算人日，计入 " + counted.length + " 条）"}
-          tone={progressPct >= 70 ? "success" : progressPct >= 35 ? "info" : "warning"}
-        />
-      </Stack>
+    __DSH_CANVAS__.h(_canvas.Stack, { gap: 24,}
+      , __DSH_CANVAS__.h(_canvas.Stack, { gap: 10,}
+        , __DSH_CANVAS__.h(_canvas.H1, null, "@local/dsh-canvas 项目看板" )
+        , __DSH_CANVAS__.h(_canvas.Text, { tone: "secondary",}, exports.DATA.goal)
+        , __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "tertiary",}, "快照 "
+           , exports.DATA.asOf, " · 修订 "   , exports.DATA.revision, " · 快照前 7 天完成 "     , recentDone.length, " 条 · WIP 上限 "     , exports.DATA.wipLimit
+        )
+        , __DSH_CANVAS__.h(_canvas.Progress, {
+          value: progressPct,
+          showValue: true,
+          label: "加权进度（按估算人日，计入 " + counted.length + " 条）",
+          tone: progressPct >= 70 ? "success" : progressPct >= 35 ? "info" : "warning",}
+        )
+      )
 
-      {/* 概览卡只有「一个数字 + 一句标签」，允许并排；auto-fit 让窄栏自动折成 2 列 */}
-      <Grid columns="repeat(auto-fit, minmax(120px, 1fr))" gap={12}>
-        <Stat value={tasks.length} label="跟踪中" hint={"在办 " + open.length + " · 关闭 " + closed.length} />
-        <Stat value={wip.length + "/" + DATA.wipLimit} label="在办 / WIP 上限" tone={wip.length > DATA.wipLimit ? "danger" : "info"} />
-        <Stat
-          value={blocked.length}
-          label="阻塞"
-          tone={blocked.length > 0 ? "danger" : "neutral"}
-          hint={blocked.length > 0 ? blocked.map((task) => task.id).join("、") : "无"}
-        />
-        <Stat value={progressPct + "%"} label="加权进度" tone={progressPct >= 70 ? "success" : "warning"} hint={Math.round(weighted / 100) + " / " + estTotal + " 人日"} />
-      </Grid>
+      /* 概览卡只有「一个数字 + 一句标签」，允许并排；auto-fit 让窄栏自动折成 2 列 */
+      , __DSH_CANVAS__.h(_canvas.Grid, { columns: "repeat(auto-fit, minmax(120px, 1fr))"  , gap: 12,}
+        , __DSH_CANVAS__.h(_canvas.Stat, { value: tasks.length, label: "跟踪中", hint: "在办 " + open.length + " · 关闭 " + closed.length,} )
+        , __DSH_CANVAS__.h(_canvas.Stat, { value: wip.length + "/" + exports.DATA.wipLimit, label: "在办 / WIP 上限"   , tone: wip.length > exports.DATA.wipLimit ? "danger" : "info",} )
+        , __DSH_CANVAS__.h(_canvas.Stat, {
+          value: blocked.length,
+          label: "阻塞",
+          tone: blocked.length > 0 ? "danger" : "neutral",
+          hint: blocked.length > 0 ? blocked.map((task) => task.id).join("、") : "无",}
+        )
+        , __DSH_CANVAS__.h(_canvas.Stat, { value: progressPct + "%", label: "加权进度", tone: progressPct >= 70 ? "success" : "warning", hint: Math.round(weighted / 100) + " / " + estTotal + " 人日",} )
+      )
 
-      {risks.length === 0 ? (
-        <Callout tone="success" title="没有需要立即处理的风险">
-          <Text size="small">无阻塞、无超期未更新、WIP 未超限、无超估算。</Text>
-        </Callout>
+      , risks.length === 0 ? (
+        __DSH_CANVAS__.h(_canvas.Callout, { tone: "success", title: "没有需要立即处理的风险",}
+          , __DSH_CANVAS__.h(_canvas.Text, { size: "small",}, "无阻塞、无超期未更新、WIP 未超限、无超估算。" )
+        )
       ) : (
-        <Callout tone={blocked.length > 0 ? "danger" : "warning"} title={risks.length + " 项需要处理"}>
-          <Stack gap={4}>
-            {risks.map((risk) => <Text key={risk} size="small">{risk}</Text>)}
-          </Stack>
-        </Callout>
-      )}
+        __DSH_CANVAS__.h(_canvas.Callout, { tone: blocked.length > 0 ? "danger" : "warning", title: risks.length + " 项需要处理",}
+          , __DSH_CANVAS__.h(_canvas.Stack, { gap: 4,}
+            , risks.map((risk) => __DSH_CANVAS__.h(_canvas.Text, { key: risk, size: "small",}, risk))
+          )
+        )
+      )
 
-      {/* 全局唯一的下一个动作：截断后第一眼要看到的就是它 */}
-      <Callout tone={DATA.nextAction === null ? "success" : "info"} title={"现在该做：" + nextAction.action}>
-        <Text size="small">
-          对应 <Code>{nextAction.taskId}</Code>：{nextAction.why}
-        </Text>
-      </Callout>
+      /* 全局唯一的下一个动作：截断后第一眼要看到的就是它 */
+      , __DSH_CANVAS__.h(_canvas.Callout, { tone: exports.DATA.nextAction === null ? "success" : "info", title: "现在该做：" + nextAction.action,}
+        , __DSH_CANVAS__.h(_canvas.Text, { size: "small",}, "对应 "
+           , __DSH_CANVAS__.h(_canvas.Code, null, nextAction.taskId), "：", nextAction.why
+        )
+      )
 
-      <Row gap={8} wrap>
-        <Pill active={filter === "open"} onClick={() => setFilter("open")}>在办 {open.length}</Pill>
-        <Pill active={filter === "blocked"} onClick={() => setFilter("blocked")}>阻塞 {blocked.length}</Pill>
-        <Pill active={filter === "closed"} onClick={() => setFilter("closed")}>已关闭 {closed.length}</Pill>
-        <Pill active={filter === "all"} onClick={() => setFilter("all")}>全部 {tasks.length}</Pill>
-        <Divider orientation="vertical" />
-        {DATA.lanes.map((lane) => (
-          <Pill key={lane} active={filter === lane} onClick={() => setFilter(lane)}>{lane}</Pill>
-        ))}
-      </Row>
+      , __DSH_CANVAS__.h(_canvas.Row, { gap: 8, wrap: true,}
+        , __DSH_CANVAS__.h(_canvas.Pill, { active: filter === "open", onClick: () => setFilter("open"),}, "在办 " , open.length)
+        , __DSH_CANVAS__.h(_canvas.Pill, { active: filter === "blocked", onClick: () => setFilter("blocked"),}, "阻塞 " , blocked.length)
+        , __DSH_CANVAS__.h(_canvas.Pill, { active: filter === "closed", onClick: () => setFilter("closed"),}, "已关闭 " , closed.length)
+        , __DSH_CANVAS__.h(_canvas.Pill, { active: filter === "all", onClick: () => setFilter("all"),}, "全部 " , tasks.length)
+        , __DSH_CANVAS__.h(_canvas.Divider, { orientation: "vertical",} )
+        , exports.DATA.lanes.map((lane) => (
+          __DSH_CANVAS__.h(_canvas.Pill, { key: lane, active: filter === lane, onClick: () => setFilter(lane),}, lane)
+        ))
+      )
 
-      <Stack gap={20}>
-        <Stack gap={12}>
-          <H2>待办</H2>
-          {DATA.lanes.map((lane) => {
+      , __DSH_CANVAS__.h(_canvas.Stack, { gap: 20,}
+        , __DSH_CANVAS__.h(_canvas.Stack, { gap: 12,}
+          , __DSH_CANVAS__.h(_canvas.H2, null, "待办")
+          , exports.DATA.lanes.map((lane) => {
             const laneRows = visible.filter((task) => task.lane === lane);
             if (laneRows.length === 0) return null;
             const laneOpen = laneRows.filter(isOpen);
@@ -453,54 +465,54 @@ export default function TaskBoard() {
             const lanePct = laneEst === 0 ? 0 : Math.round(laneWeighted / laneEst);
             const laneBlocked = laneRows.some((task) => task.status === "blocked");
             return (
-              <CollapsibleSection
-                key={lane}
-                title={lane}
-                count={laneRows.length}
-                defaultOpen
-                trailing={<Text size="caption" tone="tertiary">{laneOpen.length} 在办 · {lanePct}%</Text>}
-              >
-                <Stack gap={8}>
-                  <Progress value={lanePct} size="sm" tone={laneBlocked ? "danger" : "info"} />
-                  <TodoList
-                    todos={laneRows.map((task) => ({ id: task.id, status: task.status, content: task.priority + " · " + task.title }))}
-                    onTodoClick={(todo) => setActiveId(todo.id)}
-                  />
-                </Stack>
-              </CollapsibleSection>
-            );
-          })}
-          <CollapsibleSection
-            title="已关闭"
-            count={closed.length}
-            trailing={<Text size="caption" tone="tertiary">历史不进默认视图</Text>}
-          >
-            <TodoList
-              dense
-              todos={closed.map((task) => ({ id: task.id, status: task.status, content: task.title }))}
-              onTodoClick={(todo) => setActiveId(todo.id)}
-            />
-          </CollapsibleSection>
-        </Stack>
+              __DSH_CANVAS__.h(_canvas.CollapsibleSection, {
+                key: lane,
+                title: lane,
+                count: laneRows.length,
+                defaultOpen: true,
+                trailing: __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "tertiary",}, laneOpen.length, " 在办 · "   , lanePct, "%"),}
 
-        {active ? (
-          <Card>
-            <CardHeader trailing={<Pill size="sm" tone={STATUS_TONE[active.status]}>{STATUS_LABEL[active.status]}</Pill>}>
-              {active.id + " · " + active.priority}
-            </CardHeader>
-            <CardBody>
-              <Stack gap={12}>
-                <Text weight="semibold">{active.title}</Text>
-                <Progress
-                  value={progressOf(active)}
-                  size="sm"
-                  showValue
-                  label={"进度 · 已用 " + active.actual + " / 估算 " + active.estimate + " 人日"}
-                  tone={STATUS_TONE[active.status] === "neutral" ? "info" : STATUS_TONE[active.status]}
-                />
-                <KeyValue
-                  dense
-                  items={[
+                , __DSH_CANVAS__.h(_canvas.Stack, { gap: 8,}
+                  , __DSH_CANVAS__.h(_canvas.Progress, { value: lanePct, size: "sm", tone: laneBlocked ? "danger" : "info",} )
+                  , __DSH_CANVAS__.h(_canvas.TodoList, {
+                    todos: laneRows.map((task) => ({ id: task.id, status: task.status, content: task.priority + " · " + task.title })),
+                    onTodoClick: (todo) => setActiveId(todo.id),}
+                  )
+                )
+              )
+            );
+          })
+          , __DSH_CANVAS__.h(_canvas.CollapsibleSection, {
+            title: "已关闭",
+            count: closed.length,
+            trailing: __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "tertiary",}, "历史不进默认视图"),}
+
+            , __DSH_CANVAS__.h(_canvas.TodoList, {
+              dense: true,
+              todos: closed.map((task) => ({ id: task.id, status: task.status, content: task.title })),
+              onTodoClick: (todo) => setActiveId(todo.id),}
+            )
+          )
+        )
+
+        , active ? (
+          __DSH_CANVAS__.h(_canvas.Card, null
+            , __DSH_CANVAS__.h(_canvas.CardHeader, { trailing: __DSH_CANVAS__.h(_canvas.Pill, { size: "sm", tone: STATUS_TONE[active.status],}, STATUS_LABEL[active.status]),}
+              , active.id + " · " + active.priority
+            )
+            , __DSH_CANVAS__.h(_canvas.CardBody, null
+              , __DSH_CANVAS__.h(_canvas.Stack, { gap: 12,}
+                , __DSH_CANVAS__.h(_canvas.Text, { weight: "semibold",}, active.title)
+                , __DSH_CANVAS__.h(_canvas.Progress, {
+                  value: progressOf(active),
+                  size: "sm",
+                  showValue: true,
+                  label: "进度 · 已用 " + active.actual + " / 估算 " + active.estimate + " 人日",
+                  tone: STATUS_TONE[active.status] === "neutral" ? "info" : STATUS_TONE[active.status],}
+                )
+                , __DSH_CANVAS__.h(_canvas.KeyValue, {
+                  dense: true,
+                  items: [
                     { label: "负责人", value: active.owner === "-" ? "未认领" : active.owner },
                     { label: "分组", value: active.lane },
                     { label: "开始", value: active.startedAt === "" ? "—" : active.startedAt },
@@ -509,143 +521,148 @@ export default function TaskBoard() {
                     { label: "验收", value: active.acceptance },
                     { label: "下一步", value: active.next, tone: "info" },
                     { label: "阻塞", value: active.blocker === "" ? "无" : active.blocker, tone: active.blocker === "" ? "neutral" : "danger" },
-                    { label: "证据", value: <Code>{active.evidence}</Code> },
-                    { label: "改动", value: <Code>{active.write}</Code> },
-                    { label: "参考", value: <Code>{active.ref}</Code> },
-                    { label: "依赖", value: (active.dependsOn ?? []).length === 0 ? "无" : (active.dependsOn ?? []).join("、"), tone: "warning" },
+                    { label: "证据", value: __DSH_CANVAS__.h(_canvas.Code, null, active.evidence) },
+                    { label: "改动", value: __DSH_CANVAS__.h(_canvas.Code, null, active.write) },
+                    { label: "参考", value: __DSH_CANVAS__.h(_canvas.Code, null, active.ref) },
+                    { label: "依赖", value: (_nullishCoalesce(active.dependsOn, () => ( []))).length === 0 ? "无" : (_nullishCoalesce(active.dependsOn, () => ( []))).join("、"), tone: "warning" },
                     { label: "备注", value: active.note },
-                  ]}
-                />
-                <Divider />
-                <Row gap={8} wrap>
-                  <Button variant="primary" onClick={() => startTurn(active)}>在会话里开始</Button>
-                  <Button disabled={active.status === "in_progress"} onClick={() => overlay.set(active.id, { status: "in_progress" })}>标记进行中</Button>
-                  <Button disabled={active.status === "completed"} onClick={() => overlay.set(active.id, { status: "completed" })}>标记完成</Button>
-                  <Button disabled={active.status === "blocked"} onClick={() => overlay.set(active.id, { status: "blocked" })}>标记阻塞</Button>
-                  <Button variant="ghost" onClick={() => overlay.clear(active.id)}>恢复源数据</Button>
-                  <Button variant="ghost" onClick={() => dispatch({ type: "openFile", path: active.write })}>打开文件</Button>
-                </Row>
-                <Text size="caption" tone="tertiary">
-                  人的状态改动落进 sidecar，agent 下一轮用 canvas_read 就能看到。
-                </Text>
-              </Stack>
-            </CardBody>
-          </Card>
-        ) : null}
-      </Stack>
+                  ],}
+                )
+                , __DSH_CANVAS__.h(_canvas.Divider, null )
+                , __DSH_CANVAS__.h(_canvas.Row, { gap: 8, wrap: true,}
+                  , __DSH_CANVAS__.h(_canvas.Button, { variant: "primary", onClick: () => startTurn(active),}, "在会话里开始")
+                  , __DSH_CANVAS__.h(_canvas.Button, { disabled: active.status === "in_progress", onClick: () => overlay.set(active.id, { status: "in_progress" }),}, "标记进行中")
+                  , __DSH_CANVAS__.h(_canvas.Button, { disabled: active.status === "completed", onClick: () => overlay.set(active.id, { status: "completed" }),}, "标记完成")
+                  , __DSH_CANVAS__.h(_canvas.Button, { disabled: active.status === "blocked", onClick: () => overlay.set(active.id, { status: "blocked" }),}, "标记阻塞")
+                  , __DSH_CANVAS__.h(_canvas.Button, { variant: "ghost", onClick: () => overlay.clear(active.id),}, "恢复源数据")
+                  , __DSH_CANVAS__.h(_canvas.Button, { variant: "ghost", onClick: () => dispatch({ type: "openFile", path: active.write }),}, "打开文件")
+                )
+                , __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "tertiary",}, "人的状态改动落进 sidecar，agent 下一轮用 canvas_read 就能看到。"
 
-      <H2>下一步</H2>
-      <Stack gap={12}>
-        {nextUp.map((task) => (
-          <Card key={task.id}>
-            <CardHeader trailing={<Pill size="sm" tone={PRIORITY_TONE[task.priority]}>{task.priority}</Pill>}>
-              {task.id}
-            </CardHeader>
-            <CardBody>
-              <Stack gap={8}>
-                <Text size="small" weight="semibold">{task.title}</Text>
-                <Text size="caption" tone="secondary">{task.next}</Text>
-                <Row gap={6} wrap>
-                  <Button size="sm" variant="primary" onClick={() => startTurn(task)}>开始</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setActiveId(task.id)}>看详情</Button>
-                  {task.blocker === "" ? null : <Pill size="sm" tone="danger">阻塞</Pill>}
-                  {(task.dependsOn ?? []).length === 0 ? null : <Text size="caption" tone="warning">{"依赖 " + (task.dependsOn ?? []).join("、")}</Text>}
-                </Row>
-              </Stack>
-            </CardBody>
-          </Card>
-        ))}
-      </Stack>
+                )
+              )
+            )
+          )
+        ) : null
+      )
 
-      <H2>明细</H2>
-      <Table
-        headers={["ID", "优先", "分组", "标题", "状态", "负责人", "进度", "更新"]}
-        columnAlign={["left", "left", "left", "left", "left", "left", "right", "right"]}
-        striped
-        stickyHeader
-        emptyText="没有符合当前筛选的条目"
-        onRowClick={(index) => {
+      , __DSH_CANVAS__.h(_canvas.H2, null, "下一步")
+      , __DSH_CANVAS__.h(_canvas.Stack, { gap: 12,}
+        , nextUp.map((task) => (
+          __DSH_CANVAS__.h(_canvas.Card, { key: task.id,}
+            , __DSH_CANVAS__.h(_canvas.CardHeader, { trailing: __DSH_CANVAS__.h(_canvas.Pill, { size: "sm", tone: PRIORITY_TONE[task.priority],}, task.priority),}
+              , task.id
+            )
+            , __DSH_CANVAS__.h(_canvas.CardBody, null
+              , __DSH_CANVAS__.h(_canvas.Stack, { gap: 8,}
+                , __DSH_CANVAS__.h(_canvas.Text, { size: "small", weight: "semibold",}, task.title)
+                , __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "secondary",}, task.next)
+                , __DSH_CANVAS__.h(_canvas.Row, { gap: 6, wrap: true,}
+                  , __DSH_CANVAS__.h(_canvas.Button, { size: "sm", variant: "primary", onClick: () => startTurn(task),}, "开始")
+                  , __DSH_CANVAS__.h(_canvas.Button, { size: "sm", variant: "ghost", onClick: () => setActiveId(task.id),}, "看详情")
+                  , task.blocker === "" ? null : __DSH_CANVAS__.h(_canvas.Pill, { size: "sm", tone: "danger",}, "阻塞")
+                  , (_nullishCoalesce(task.dependsOn, () => ( []))).length === 0 ? null : __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "warning",}, "依赖 " + (_nullishCoalesce(task.dependsOn, () => ( []))).join("、"))
+                )
+              )
+            )
+          )
+        ))
+      )
+
+      , __DSH_CANVAS__.h(_canvas.H2, null, "明细")
+      , __DSH_CANVAS__.h(_canvas.Table, {
+        headers: ["ID", "优先", "分组", "标题", "状态", "负责人", "进度", "更新"],
+        columnAlign: ["left", "left", "left", "left", "left", "left", "right", "right"],
+        striped: true,
+        stickyHeader: true,
+        emptyText: "没有符合当前筛选的条目",
+        onRowClick: (index) => {
           const row = visible[index];
           if (row !== undefined) setActiveId(row.id);
-        }}
-        rows={visible.map((task) => [
-          <Code>{task.id}</Code>,
-          <Pill size="sm" tone={PRIORITY_TONE[task.priority]}>{task.priority}</Pill>,
+        },
+        rows: visible.map((task) => [
+          __DSH_CANVAS__.h(_canvas.Code, null, task.id),
+          __DSH_CANVAS__.h(_canvas.Pill, { size: "sm", tone: PRIORITY_TONE[task.priority],}, task.priority),
           task.lane,
           task.title,
-          <Pill size="sm" tone={STATUS_TONE[task.status]}>{STATUS_LABEL[task.status]}</Pill>,
+          __DSH_CANVAS__.h(_canvas.Pill, { size: "sm", tone: STATUS_TONE[task.status],}, STATUS_LABEL[task.status]),
           task.owner === "-" ? "未认领" : task.owner,
-          <Progress value={progressOf(task)} size="sm" showValue tone={STATUS_TONE[task.status] === "neutral" ? "info" : STATUS_TONE[task.status]} />,
+          __DSH_CANVAS__.h(_canvas.Progress, { value: progressOf(task), size: "sm", showValue: true, tone: STATUS_TONE[task.status] === "neutral" ? "info" : STATUS_TONE[task.status],} ),
           task.updatedAt,
-        ])}
-        rowTone={visible.map((task) => task.status === "blocked" ? "danger" : task.status === "completed" ? "success" : "neutral")}
-      />
+        ]),
+        rowTone: visible.map((task) => task.status === "blocked" ? "danger" : task.status === "completed" ? "success" : "neutral"),}
+      )
 
-      {/* 上下文锚点：截断或换人接手时先读这两节，避免重开已经定过的事 */}
-      <CollapsibleSection title="约束与红线" count={DATA.constraints.length}>
-        <Table
-          headers={["规则", "为什么", "违反了会怎样"]}
-          rows={DATA.constraints.map((item) => [item.rule, item.because, item.violation])}
-          emptyText="没有登记红线"
-        />
-      </CollapsibleSection>
+      /* 上下文锚点：截断或换人接手时先读这两节，避免重开已经定过的事 */
+      , __DSH_CANVAS__.h(_canvas.CollapsibleSection, { title: "约束与红线", count: exports.DATA.constraints.length,}
+        , __DSH_CANVAS__.h(_canvas.Table, {
+          headers: ["规则", "为什么", "违反了会怎样"],
+          rows: exports.DATA.constraints.map((item) => [item.rule, item.because, item.violation]),
+          emptyText: "没有登记红线",}
+        )
+      )
 
-      <CollapsibleSection title="已定决策" count={DATA.decisions.length}>
-        <Table
-          headers={["决策", "选了", "已否决", "理由", "参考"]}
-          rows={DATA.decisions.map((item) => [
-            <Code>{item.id}</Code>,
+      , __DSH_CANVAS__.h(_canvas.CollapsibleSection, { title: "已定决策", count: exports.DATA.decisions.length,}
+        , __DSH_CANVAS__.h(_canvas.Table, {
+          headers: ["决策", "选了", "已否决", "理由", "参考"],
+          rows: exports.DATA.decisions.map((item) => [
+            __DSH_CANVAS__.h(_canvas.Code, null, item.id),
             item.chose,
             item.rejected.join("、"),
             item.why,
-            <Code>{item.ref}</Code>,
-          ])}
-          emptyText="没有登记决策"
-        />
-      </CollapsibleSection>
+            __DSH_CANVAS__.h(_canvas.Code, null, item.ref),
+          ]),
+          emptyText: "没有登记决策",}
+        )
+      )
 
-      <CollapsibleSection
-        title="活动"
-        count={DATA.activity.length}
-        defaultOpen
-        trailing={<Text size="caption" tone="tertiary">只留最近 {DATA.activity.length} 条；更早的看提交历史</Text>}
-      >
-        <Timeline
-          events={DATA.activity.map((event) => ({
+      , __DSH_CANVAS__.h(_canvas.CollapsibleSection, {
+        title: "活动",
+        count: exports.DATA.activity.length,
+        defaultOpen: true,
+        trailing: __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "tertiary",}, "只留最近 " , exports.DATA.activity.length, " 条；更早的看提交历史" ),}
+
+        , __DSH_CANVAS__.h(_canvas.Timeline, {
+          events: exports.DATA.activity.map((event) => ({
             id: event.id,
             at: event.at,
             title: event.title,
             tone: event.tone,
             detail: event.detail,
             ref: event.ref,
-          }))}
-        />
-      </CollapsibleSection>
+          })),}
+        )
+      )
 
-      <CollapsibleSection title="怎么维护这张画布">
-        <Stack gap={6}>
-          <Text size="small">
-            <Code>DATA</Code> 是 agent 写的数据快照：统计、进度、风险都从它现算，不要手抄结论。
-          </Text>
-          <Text size="small">
-            人的状态改动走画布上的按钮，落进 sidecar（<Code>canvas_read</Code> 可见）；确认后由 agent 固化回 <Code>DATA</Code>。
-          </Text>
-          <Text size="small">
-            <Code>constraints</Code> / <Code>decisions</Code> / <Code>nextAction</Code> 是给"截断后接手"用的：
-            换会话时先 <Code>canvas_read brief</Code> 一把拿全，不要重读整份文件，也不要重开已定的事。
-          </Text>
-          <Text size="small">
-            筛选器与当前选中项只存在本机（<Code>useCanvasState</Code>），刷新后保留，agent 看不到。
-          </Text>
-          <Text size="small" tone="tertiary">
-            这条画布只放当前窗口；已完成超过一个窗口的条目应移出，而不是把历史粘进来。
-          </Text>
-        </Stack>
-      </CollapsibleSection>
+      , __DSH_CANVAS__.h(_canvas.CollapsibleSection, { title: "怎么维护这张画布",}
+        , __DSH_CANVAS__.h(_canvas.Stack, { gap: 6,}
+          , __DSH_CANVAS__.h(_canvas.Text, { size: "small",}
+            , __DSH_CANVAS__.h(_canvas.Code, null, "DATA"), " 是 agent 写的数据快照：统计、进度、风险都从它现算，不要手抄结论。"
+          )
+          , __DSH_CANVAS__.h(_canvas.Text, { size: "small",}, "人的状态改动走画布上的按钮，落进 sidecar（"
+             , __DSH_CANVAS__.h(_canvas.Code, null, "canvas_read"), " 可见）；确认后由 agent 固化回 "    , __DSH_CANVAS__.h(_canvas.Code, null, "DATA"), "。"
+          )
+          , __DSH_CANVAS__.h(_canvas.Text, { size: "small",}
+            , __DSH_CANVAS__.h(_canvas.Code, null, "constraints"), " / "  , __DSH_CANVAS__.h(_canvas.Code, null, "decisions"), " / "  , __DSH_CANVAS__.h(_canvas.Code, null, "nextAction"), " 是给\"截断后接手\"用的： 换会话时先 "
+             , __DSH_CANVAS__.h(_canvas.Code, null, "canvas_read brief" ), " 一把拿全，不要重读整份文件，也不要重开已定的事。"
+          )
+          , __DSH_CANVAS__.h(_canvas.Text, { size: "small",}, "筛选器与当前选中项只存在本机（"
+            , __DSH_CANVAS__.h(_canvas.Code, null, "useCanvasState"), "），刷新后保留，agent 看不到。"
+          )
+          , __DSH_CANVAS__.h(_canvas.Text, { size: "small", tone: "tertiary",}, "这条画布只放当前窗口；已完成超过一个窗口的条目应移出，而不是把历史粘进来。"
 
-      <Text size="caption" tone="tertiary">
-        快照 {DATA.asOf} · 修订 {DATA.revision} · 由 agent 更新，人只改状态。
-      </Text>
-    </Stack>
+          )
+        )
+      )
+
+      , __DSH_CANVAS__.h(_canvas.Text, { size: "caption", tone: "tertiary",}, "快照 "
+         , exports.DATA.asOf, " · 修订 "   , exports.DATA.revision, " · 由 agent 更新，人只改状态。"
+      )
+    )
   );
-}
+} exports.default = TaskBoard;
+
+})(__require, __module.exports, __module, __C);
+export default __module.exports.default;
+export const DATA = __module.exports.DATA;
+export const __canvas = { compiler: "c1", kit: "k2" };

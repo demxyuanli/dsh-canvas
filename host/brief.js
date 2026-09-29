@@ -74,9 +74,11 @@ export function briefDigest(data, options = {}) {
   const nextAction = data.nextAction === undefined || data.nextAction === null
     ? data.nextAction
     : pick(data.nextAction, ["taskId", "action", "why"]);
-  if (data.nextAction === undefined || data.nextAction === null) {
+  if (data.nextAction === undefined) {
+    // A missing field is not the same as a deliberate null: null states "nothing
+    // is open", so it must read as an answer rather than as a gap.
     notes.push("no nextAction in DATA: after a truncation the agent cannot tell which single step comes first");
-  } else {
+  } else if (data.nextAction !== null) {
     if (typeof data.nextAction.action !== "string" || data.nextAction.action === "") notes.push("nextAction.action is empty");
     if (typeof data.nextAction.taskId === "string") {
       const target = byId.get(data.nextAction.taskId);

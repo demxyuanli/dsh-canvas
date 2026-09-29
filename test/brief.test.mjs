@@ -111,6 +111,20 @@ check("a nextAction aimed at a closed row is reported", () => {
   assert.deepEqual(aimed.notes, [], "an open target must stay quiet");
 });
 
+check("nextAction: null is an answer, not a missing field", () => {
+  // "Everything in this window is closed" is a legitimate state; only an absent
+  // field means the author forgot. Conflating them made the digest nag forever.
+  const done = briefDigest({
+    goal: "g", constraints: [], decisions: [],
+    nextAction: null,
+    tasks: [{ id: "t1", status: "completed" }],
+  });
+  assert.equal(done.nextAction, null);
+  assert.deepEqual(done.notes, [], "a deliberate null must not be reported as missing");
+  const forgotten = briefDigest({ goal: "g", constraints: [], decisions: [], tasks: [{ id: "t1", status: "completed" }] });
+  assert.ok(forgotten.notes.some((note) => note.includes("no nextAction")), "an absent field must still be reported");
+});
+
 check("an empty nextAction.action is reported", () => {
   const empty = briefDigest({ goal: "g", nextAction: { action: "" }, constraints: [], decisions: [], tasks: [{ id: "t1", status: "pending" }] });
   assert.ok(empty.notes.some((note) => note.includes("nextAction.action is empty")));
@@ -197,9 +211,15 @@ for (const rel of ["skills/canvas/templates/board.canvas.tsx", "board.canvas.tsx
     const data = result.data;
     assert.ok(Array.isArray(data.constraints) && data.constraints.length > 0, "constraints must be non-empty");
     assert.ok(Array.isArray(data.decisions) && data.decisions.length > 0, "decisions must be non-empty");
-    assert.ok(data.nextAction !== undefined && typeof data.nextAction.action === "string", "nextAction must be present");
+    // Present, but deliberately empty is allowed: null says "nothing is open".
+    assert.ok(data.nextAction !== undefined, "nextAction must be present (null = deliberately nothing open)");
     const ids = new Set(data.tasks.map((task) => task.id));
-    assert.ok(ids.has(data.nextAction.taskId), "nextAction.taskId must exist: " + data.nextAction.taskId);
+    if (data.nextAction !== null) {
+      assert.equal(typeof data.nextAction.action, "string", "nextAction.action must be a string");
+      assert.ok(ids.has(data.nextAction.taskId), "nextAction.taskId must exist: " + data.nextAction.taskId);
+    } else {
+      assert.equal(data.tasks.filter((task) => task.status === "pending" || task.status === "in_progress" || task.status === "blocked").length, 0, "a null nextAction must mean nothing is open");
+    }
     for (const task of data.tasks) {
       for (const dependency of task.dependsOn ?? []) {
         assert.ok(ids.has(dependency), task.id + " dependsOn unknown task " + dependency);

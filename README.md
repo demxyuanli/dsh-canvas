@@ -34,9 +34,9 @@
 
 **套件全貌**（[selfcheck.canvas.tsx](examples/selfcheck.canvas.tsx)）：`Stack / Row / Stat / Progress / BarChart / Table / Timeline / TodoList / CollapsibleSection / Button / Pill` 与全部钩子在同一张画布上（画布一律单列纵向）。
 
-![套件全貌 · 深色](docs/preview/selfcheck-dark.png)
+![套件全貌 · 深色](docs/preview/examples-selfcheck-dark.png)
 
-> 截图宽度 560px、2x 缩放（贴近右栏实际宽度），画布**单列纵向**排列，所以图比较长。主题为 harness **深色**：light / dark 两套 token 在同一条主题表里，靠 `body[data-ds-dark-theme]` 切换 —— 脚本用 `THEME=dark` 生成深色，去掉即浅色。
+> 截图宽度 560px、2x 缩放（贴近右栏实际宽度），画布**单列纵向**排列，所以图比较长。主题为 harness **深色**：light / dark 两套 token 在同一条主题表里，靠 `body[data-ds-dark-theme]` 切换 —— 脚本用 `THEME=dark` 生成深色，去掉即浅色。产物名由画布的相对路径派生（`examples/selfcheck.canvas.tsx` → `examples-selfcheck`），所以不同目录下的同名画布不会互相覆盖。
 
 <details>
 <summary>浅色主题变体（同样三张）</summary>
@@ -45,7 +45,7 @@
 
 ![门禁看板 · 浅色](docs/preview/gates.png)
 
-![套件全貌 · 浅色](docs/preview/selfcheck.png)
+![套件全貌 · 浅色](docs/preview/examples-selfcheck.png)
 
 </details>
 
