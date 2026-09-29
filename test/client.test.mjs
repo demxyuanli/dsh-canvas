@@ -58,12 +58,51 @@ t("exports a plugin that injects the sidebar services", () => {
 t("publishes the kit for compiled canvases", () => {
   const kit = globalThis.__DSH_CANVAS__;
   assert.equal(typeof kit.h, "function");
-  for (const name of ["Stack", "Row", "Grid", "Divider", "CollapsibleSection", "H1", "H2", "Text", "Code", "Card", "CardHeader", "CardBody", "Callout", "Stat", "Table", "BarChart", "TodoList", "Progress", "KeyValue", "Timeline", "Button", "Pill"]) {
+  for (const name of ["Stack", "Row", "Grid", "Divider", "CollapsibleSection", "H1", "H2", "Text", "Code", "Card", "CardHeader", "CardBody", "Callout", "Stat", "Table", "BarChart", "HeatMatrix", "TodoList", "Progress", "KeyValue", "Timeline", "Button", "Pill"]) {
     assert.ok(kit[name] !== undefined, "kit is missing component " + name);
   }
   for (const name of ["useCanvasState", "useCanvasOverlay", "useCanvasAction", "useHostTheme", "useCanvasResource", "useMemo", "useState", "useEffect"]) {
     assert.ok(kit[name] !== undefined, "kit is missing hook " + name);
   }
+});
+
+t("HeatMatrix renders both layouts and a summary from one data shape", () => {
+  const kit = globalThis.__DSH_CANVAS__;
+  const rows = [
+    { id: "T-1", status: "completed", values: [2, 0] },
+    { id: "T-2", status: "in_progress", values: [0, 3] },
+  ];
+  const collect = (node, out) => {
+    if (node === null || node === undefined || typeof node === "boolean") return out;
+    if (Array.isArray(node)) { node.forEach((child) => collect(child, out)); return out; }
+    if (typeof node === "string" || typeof node === "number") { out.text.push(String(node)); return out; }
+    if (typeof node.type === "function") return collect(node.type(node.props), out);
+    const props = node.props || {};
+    if (props.style && typeof props.style.background === "string") out.shades.push(props.style.background);
+    if (typeof props.title === "string") out.titles.push(props.title);
+    // This file's React stub keeps children on the element, not inside props.
+    collect(node.children === undefined ? props.children : node.children, out);
+    return out;
+  };
+  const read = (element) => {
+    const out = collect(element, { text: [], shades: [], titles: [] });
+    out.flat = out.text.join(" ");
+    return out;
+  };
+
+  const matrix = read(kit.HeatMatrix({ columns: ["R1", "R2"], rows: rows, layout: "matrix" }));
+  assert.match(matrix.flat, /任务/, "the matrix needs its corner label");
+  assert.match(matrix.flat, /合计/, "the matrix needs a per-row total column");
+  assert.match(matrix.flat, /2 个任务 · 完成 1 · 总次 5/, matrix.flat);
+  assert.match(matrix.flat, /颜色越深 = 次数越多/, "the legend has to explain the encoding");
+  assert.ok(matrix.titles.some((t) => /T-2 · R2 · 3 次/.test(t)), "a cell names row, column and count: " + matrix.titles.join(" | "));
+
+  const grid = read(kit.HeatMatrix({ columns: ["R1", "R2"], rows: rows, layout: "grid" }));
+  assert.ok(!/合计/.test(grid.flat), "the grid folds the time dimension away");
+  assert.match(grid.flat, /每格一个任务/, "the grid needs its own caption");
+  assert.equal(grid.titles.filter((t) => t.startsWith("T-")).length, 2, "one cell per row in the grid layout");
+
+  assert.ok(new Set(matrix.shades.concat(grid.shades)).size >= 3, "depth must vary: empty, light and deep are distinct");
 });
 
 const seen = { types: [], slots: [] };

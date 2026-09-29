@@ -5,7 +5,7 @@
  */
 import {
   H1, H2, Text, Code, Stack, Grid, Row, Divider, Card, CardBody, CardHeader,
-  Callout, Stat, Table, BarChart, TodoList, Pill, Button, CollapsibleSection,
+  Callout, Stat, Table, BarChart, HeatMatrix, TodoList, Pill, Button, CollapsibleSection,
   Progress, KeyValue, Timeline,
   useCanvasState, useCanvasOverlay, useCanvasAction, useMemo,
 } from "dsh/canvas";
@@ -44,6 +44,19 @@ export const DATA = {
     { name: "host tests", data: [16, 15, 0] , tone: "info" },
     { name: "browser tests", data: [0, 0, 0], tone: "warning" },
   ],
+  // Heat-matrix demo: how many times each check was touched, per round. A real
+  // board derives the same shape from its own records (see patterns.md).
+  iterations: {
+    columns: ["R1", "R2", "R3", "R4", "R5"],
+    rows: [
+      { id: "c1", values: [3, 1, 0, 1, 0], status: "completed" },
+      { id: "c2", values: [2, 0, 0, 0, 0], status: "completed" },
+      { id: "c6", values: [0, 2, 3, 1, 0], status: "completed" },
+      { id: "c7", values: [1, 4, 2, 0, 0], status: "completed" },
+      { id: "c11", values: [0, 0, 1, 2, 3], status: "completed" },
+      { id: "c12", values: [0, 0, 0, 1, 2], status: "completed" },
+    ],
+  },
   stages: ["host e2e", "host core", "browser"],
   activity: [
     { id: "a1", at: "2026-09-27", title: "host pipeline verified", tone: "success", detail: "compile / module / action / sidecar over HTTP", ref: "test/serve.test.mjs" },
@@ -104,6 +117,21 @@ export default function SelfCheck() {
         series={DATA.series.map((s) => ({ name: s.name, data: s.data as unknown as number[], tone: s.tone as Tone }))}
         beginAtZero
         height={200}
+      />
+
+      <H2>Iterations per round</H2>
+      <Text size="caption" tone="tertiary">
+        同一份数据两种 layout：matrix 保留时间维度（行 = 任务，列 = 轮次），grid 把每行折成一格、按得色深浅铺开。
+      </Text>
+      <HeatMatrix
+        columns={DATA.iterations.columns as unknown as string[]}
+        rows={DATA.iterations.rows as unknown as Array<{ id: string; values: number[] }>}
+        layout="matrix"
+      />
+      <HeatMatrix
+        columns={DATA.iterations.columns as unknown as string[]}
+        rows={DATA.iterations.rows as unknown as Array<{ id: string; values: number[] }>}
+        layout="grid"
       />
 
       <Row gap={8} wrap>

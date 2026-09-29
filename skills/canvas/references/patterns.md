@@ -76,6 +76,38 @@ if (wip.length > DATA.wipLimit) risks.push("在办超过 WIP 上限 " + DATA.wip
 
 > `asOf` 是**数据里的快照日**。所有「多少天没动」都相对它算，不要用 `Date.now()`：画布是快照，不是一个会自己漂的时钟。
 
+**迭代热力：谁在反复折腾**
+
+"这个任务改了多少次" 不该手抄 —— 它应该从**已有记录**里数出来。约定：活动日志的每条带上它属于哪个任务。
+
+~~~tsx
+activity: [
+  { id: "a20", at: "2026-09-29", taskId: "V-04", title: "沙箱策略透传已验证",
+    tone: "success", detail: "…", ref: "test/serve.test.mjs" },
+]
+~~~
+
+看板据此现算矩阵（列 = 出现过的日期，行 = 任务）：
+
+~~~tsx
+const columns = useMemo(
+  () => Array.from(new Set(DATA.activity.map((e) => e.at))).sort(),
+  [],
+);
+const heatRows = tasks.map((task) => ({
+  id: task.id,
+  status: task.status,
+  values: columns.map((at) => DATA.activity.filter((e) => e.at === at && e.taskId === task.id).length),
+}));
+
+<HeatMatrix columns={columns} rows={heatRows} unit="次" />
+~~~
+
+- **没有 `taskId` 的历史条目数不进来**，也不要用标题文本匹配兜底：那是猜的，而热力图的数字必须可复核；
+- 数据不是活动日志的画布（例如按轮次人工记录），直接显式写 `iterations: { columns, rows }`；
+- 两种 layout：`matrix` 看"哪一轮动的、谁最反复"，`grid` 看"整体规模 + 分布"（**面积 = 条目数**）。
+
+
 **关键片段：筛选 + 选中 + 人的状态改动**
 
 ~~~tsx

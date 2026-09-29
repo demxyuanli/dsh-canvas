@@ -78,7 +78,12 @@ export function briefDigest(data, options = {}) {
     // A missing field is not the same as a deliberate null: null states "nothing
     // is open", so it must read as an answer rather than as a gap.
     notes.push("no nextAction in DATA: after a truncation the agent cannot tell which single step comes first");
-  } else if (data.nextAction !== null) {
+  } else if (data.nextAction === null) {
+    // null is a claim: "nothing is open". It has to be checked like any other
+    // claim, or a board can sit there insisting it has nothing to do.
+    const stillOpen = tasks.filter((t) => OPEN_STATUSES.has(t.status)).length;
+    if (stillOpen > 0) notes.push("nextAction is null but " + stillOpen + " row(s) are still open: null means nothing is open");
+  } else {
     if (typeof data.nextAction.action !== "string" || data.nextAction.action === "") notes.push("nextAction.action is empty");
     if (typeof data.nextAction.taskId === "string") {
       const target = byId.get(data.nextAction.taskId);
@@ -90,6 +95,14 @@ export function briefDigest(data, options = {}) {
         notes.push("nextAction.taskId " + data.nextAction.taskId + " is already " + String(target.status) + "; point it at the next open row");
       }
     }
+  }
+  // Duplicate ids make every id-keyed thing ambiguous: the sidecar overlay,
+  // dependsOn, nextAction, and any matrix the canvas derives from tasks.
+  const seenIds = new Set();
+  for (const task of tasks) {
+    if (typeof task.id !== "string" || task.id === "") continue;
+    if (seenIds.has(task.id)) notes.push("duplicate task id " + task.id + ": overlays and dependsOn cannot address it unambiguously");
+    seenIds.add(task.id);
   }
   for (const task of tasks) {
     if (!Array.isArray(task.dependsOn)) continue;

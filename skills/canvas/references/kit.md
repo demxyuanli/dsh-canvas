@@ -348,6 +348,29 @@ type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
 />
 ~~~
 
+### `HeatMatrix`
+
+热力矩阵 / 热力格：**深浅 = 一个可数的量**（迭代次数、改动次数、复发次数）。它回答"哪些格子反复动过"，"多少"留给 `Stat` / `BarChart`。
+
+| prop | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `columns` | `string[]` | 必填 | 列标签（轮次 / 日期 / 阶段）；**超过 `maxColumns` 只渲染前面那些**并提示 |
+| `rows` | `{ id, label?, status?, values: number[] }` | 必填 | `values` 与 `columns` 对齐；`status` 只影响行头/下沿的颜色 |
+| `layout` | `"matrix" \| "grid"` | `"matrix"` | `matrix`：行 = 条目、列 = 轮次；`grid`：一格一条目、深浅 = 行累计 |
+| `unit` | `string` | `"次"` | 图例与汇总里的单位 |
+| `maxColumns` / `maxRows` | `number` | `16` / `24` | 封顶；超出会显式写"showing X of Y" |
+| `showSummary` | `boolean` | `true` | 底部汇总（条目数 · 完成数 · 总数 · 最深一格） |
+
+~~~tsx
+<HeatMatrix
+  columns={DATA.rounds}
+  rows={DATA.tasks.map((t) => ({ id: t.id, status: t.status, values: DATA.iterations[t.id] }))}
+  layout="matrix"
+/>
+~~~
+
+> 数据从哪来？优先**从已有记录派生**（例如活动日志里每条带 `taskId`，按"任务 × 日期"数一数），再允许显式写 `iterations`。见 [patterns.md](patterns.md) 的「迭代热力」。
+
 ### `TodoList`
 
 待办清单。行前是状态点，`onTodoClick` 让整行可点（常用来把"点行"变成"切换当前详情"）。

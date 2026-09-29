@@ -125,6 +125,23 @@ check("nextAction: null is an answer, not a missing field", () => {
   assert.ok(forgotten.notes.some((note) => note.includes("no nextAction")), "an absent field must still be reported");
 });
 
+check("null is checked like any other claim", () => {
+  // Found by using it: a renamed task left two rows sharing an id, and a board
+  // could assert "nothing is open" while an open row sat in tasks[].
+  const lying = briefDigest({
+    goal: "g", constraints: [], decisions: [],
+    nextAction: null,
+    tasks: [{ id: "t1", status: "pending" }],
+  });
+  assert.ok(lying.notes.some((note) => note.includes("still open")), "null must not contradict an open row");
+  const duplicated = briefDigest({
+    goal: "g", constraints: [], decisions: [],
+    nextAction: null,
+    tasks: [{ id: "t1", status: "completed" }, { id: "t1", status: "completed" }],
+  });
+  assert.ok(duplicated.notes.some((note) => note.includes("duplicate task id")), "a duplicate id makes every id-keyed lookup ambiguous");
+});
+
 check("an empty nextAction.action is reported", () => {
   const empty = briefDigest({ goal: "g", nextAction: { action: "" }, constraints: [], decisions: [], tasks: [{ id: "t1", status: "pending" }] });
   assert.ok(empty.notes.some((note) => note.includes("nextAction.action is empty")));

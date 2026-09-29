@@ -6,7 +6,7 @@
 import {
   H1, H2, Text, Code, Stack, Grid, Row, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, TodoList, Pill, Button, Progress, KeyValue, Timeline,
-  CollapsibleSection, useMemo, useCanvasState, useCanvasOverlay, useCanvasAction,
+  CollapsibleSection, HeatMatrix, useMemo, useCanvasState, useCanvasOverlay, useCanvasAction,
 } from "dsh/canvas";
 
 type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
@@ -209,7 +209,7 @@ export const DATA = {
       ref: "troubleshooting.md", note: "用白名单的 command 精确匹配判定生效命令：新命令 ok、旧命令『not in commandWhitelist』",
     },
     {
-      id: "D-01", lane: "docs", title: "preview 脚本按 basename 命名会互相覆盖",
+      id: "D-03", lane: "docs", title: "preview 脚本按 basename 命名会互相覆盖",
       status: "completed", priority: "P3", owner: "agent",
       progress: 100, estimate: 1, actual: 1,
       startedAt: "2026-09-29", updatedAt: "2026-09-29", completedAt: "2026-09-29", blocker: "",
@@ -221,33 +221,33 @@ export const DATA = {
     },
   ],
   activity: [
-    { id: "a1", at: "2026-09-28", title: "意图入口在真实会话里触发", tone: "success", detail: "用户发「给我建个项目看板」→ host 注入 intake", ref: "host/intent.js" },
-    { id: "a2", at: "2026-09-28", title: "画布 tab 拿到滚动容器与边距", tone: "success", detail: "tabBody 会裁剪，改由 tab body 自己滚", ref: "lib/client.js" },
-    { id: "a3", at: "2026-09-28", title: "排版映射到 harness 刻度", tone: "success", detail: "13px 基线；--dsw-font-mono 不存在，改用 --ds-font-family-code", ref: "lib/client.js" },
+    { id: "a1", at: "2026-09-28", taskId: "V-02", title: "意图入口在真实会话里触发", tone: "success", detail: "用户发「给我建个项目看板」→ host 注入 intake", ref: "host/intent.js" },
+    { id: "a2", at: "2026-09-28", taskId: "V-01", title: "画布 tab 拿到滚动容器与边距", tone: "success", detail: "tabBody 会裁剪，改由 tab body 自己滚", ref: "lib/client.js" },
+    { id: "a3", at: "2026-09-28", taskId: "V-01", title: "排版映射到 harness 刻度", tone: "success", detail: "13px 基线；--dsw-font-mono 不存在，改用 --ds-font-family-code", ref: "lib/client.js" },
     { id: "a4", at: "2026-09-28", title: "runCommand 与 canvas_state_merge 落地", tone: "success", detail: "四个模型工具；白名单执行 + 最小字段合并", ref: "index.js" },
     { id: "a5", at: "2026-09-28", title: "全量测试 94 断言 / 8 个文件", tone: "info", detail: "4 个画布 canvas_check 0 诊断", ref: "test/" },
-    { id: "a6", at: "2026-09-28", title: "merge 排版边界收口", tone: "success", detail: "tab 缩进 / CRLF / 单行对象 / 无 id 行各一条断言", ref: "test/merge.test.mjs" },
-    { id: "a7", at: "2026-09-28", title: "诊断码口径收敛", tone: "success", detail: "E_REACT_IMPORT 删除；reserved 码不再写成会产出", ref: "troubleshooting.md" },
-    { id: "a8", at: "2026-09-28", title: "README 限制与未验证项更新", tone: "success", detail: "P0 两个阻塞项闭环；登记意图入口的启发式限制", ref: "README.md" },
-    { id: "a9", at: "2026-09-28", title: "版本 0.2.0 + npm test", tone: "success", detail: "8 个测试文件；移除不存在的 client/ 目录", ref: "package.json" },
-    { id: "a10", at: "2026-09-28", title: "「开始」按钮点了没反应", tone: "danger", detail: "startTurn 漏了必填 mode 与 AbortSignal，prompt() 抛 TypeError", ref: "index.js" },
-    { id: "a11", at: "2026-09-28", title: "startTurn 按契约补齐并加成功反馈", tone: "success", detail: "mode=queue + signal；成功也弹一条 info 通知", ref: "DESIGN.md §27" },
-    { id: "a12", at: "2026-09-28", title: "点击报 unsupported action undefined", tone: "danger", detail: "客户端把 action 平铺进 body，host 读的是 body.action", ref: "lib/client.js" },
-    { id: "a13", at: "2026-09-28", title: "action 信封两端对齐 + host 兼容扁平形状", tone: "success", detail: "四条 host 动作恢复；接缝补上双向断言", ref: "DESIGN.md §28" },
-    { id: "a14", at: "2026-09-28", title: "runCommand 在真实 ctx.shell 上 exit=0", tone: "success", detail: "profile 登记 gate:tests / gate:templates；新建 gates.canvas.tsx", ref: "cordis.patch.yml" },
-    { id: "a15", at: "2026-09-28", title: "意图入口不再被任务提交触发", tone: "success", detail: "按 source.rpcId 的 canvas-* 前缀过滤", ref: "host/intent.js" },
+    { id: "a6", at: "2026-09-28", taskId: "H-01", title: "merge 排版边界收口", tone: "success", detail: "tab 缩进 / CRLF / 单行对象 / 无 id 行各一条断言", ref: "test/merge.test.mjs" },
+    { id: "a7", at: "2026-09-28", taskId: "D-01", title: "诊断码口径收敛", tone: "success", detail: "E_REACT_IMPORT 删除；reserved 码不再写成会产出", ref: "troubleshooting.md" },
+    { id: "a8", at: "2026-09-28", taskId: "D-02", title: "README 限制与未验证项更新", tone: "success", detail: "P0 两个阻塞项闭环；登记意图入口的启发式限制", ref: "README.md" },
+    { id: "a9", at: "2026-09-28", taskId: "R-01", title: "版本 0.2.0 + npm test", tone: "success", detail: "8 个测试文件；移除不存在的 client/ 目录", ref: "package.json" },
+    { id: "a10", at: "2026-09-28", taskId: "F-01", title: "「开始」按钮点了没反应", tone: "danger", detail: "startTurn 漏了必填 mode 与 AbortSignal，prompt() 抛 TypeError", ref: "index.js" },
+    { id: "a11", at: "2026-09-28", taskId: "F-01", title: "startTurn 按契约补齐并加成功反馈", tone: "success", detail: "mode=queue + signal；成功也弹一条 info 通知", ref: "DESIGN.md §27" },
+    { id: "a12", at: "2026-09-28", taskId: "F-02", title: "点击报 unsupported action undefined", tone: "danger", detail: "客户端把 action 平铺进 body，host 读的是 body.action", ref: "lib/client.js" },
+    { id: "a13", at: "2026-09-28", taskId: "F-02", title: "action 信封两端对齐 + host 兼容扁平形状", tone: "success", detail: "四条 host 动作恢复；接缝补上双向断言", ref: "DESIGN.md §28" },
+    { id: "a14", at: "2026-09-28", taskId: "V-03", title: "runCommand 在真实 ctx.shell 上 exit=0", tone: "success", detail: "profile 登记 gate:tests / gate:templates；新建 gates.canvas.tsx", ref: "cordis.patch.yml" },
+    { id: "a15", at: "2026-09-28", taskId: "F-03", title: "意图入口不再被任务提交触发", tone: "success", detail: "按 source.rpcId 的 canvas-* 前缀过滤", ref: "host/intent.js" },
     { id: "a16", at: "2026-09-28", title: "画布改为单列纵向排列", tone: "success", detail: "模板 / 本仓画布 / patterns 与 kit 约定同步；不再左右分栏", ref: "skills/canvas/references/patterns.md" },
     { id: "a17", at: "2026-09-29", title: "插件在 DSH Desktop 上激活", tone: "success", detail: "装入 desktop profile 后重启：host 半边 200，四个工具可用，门禁 exit=0", ref: "profiles/desktop/package.json" },
-    { id: "a18", at: "2026-09-29", title: "client 半边确认渲染", tone: "success", detail: "board.canvas.tsx 在 Desktop 打开为画布；client bundle 走 dsh-app://app/plugins/<pkg>/client.js，不经 HTTP", ref: "skills/canvas/references/troubleshooting.md" },
+    { id: "a18", at: "2026-09-29", taskId: "V-01", title: "client 半边确认渲染", tone: "success", detail: "board.canvas.tsx 在 Desktop 打开为画布；client bundle 走 dsh-app://app/plugins/<pkg>/client.js，不经 HTTP", ref: "skills/canvas/references/troubleshooting.md" },
     { id: "a19", at: "2026-09-29", title: "画布加入上下文锚点", tone: "success", detail: "constraints / decisions / nextAction / dependsOn：模板、本仓看板、resume.md、canvas_read brief", ref: "skills/canvas/references/resume.md" },
-    { id: "a20", at: "2026-09-29", title: "V-04 沙箱策略透传已验证", tone: "success", detail: "dsh-pwsh-sandbox 的 resolve() 认 request.sandboxPolicy；同机实测不同会话解析出不同 mode；补 read-only 桩测试", ref: "test/serve.test.mjs" },
-    { id: "a21", at: "2026-09-29", title: "V-05 现状取证", tone: "info", detail: "无 session 时走部署默认 → workspace-write 静默执行，既不拒绝也无提示", ref: "index.js:432" },
-    { id: "a22", at: "2026-09-29", title: "V-04 验收通过（live read-only）", tone: "success", detail: "切 preset 后 sandbox.mode=read-only、denied=false；顺带查清 read-only 下 node --test 因 spawn 管道被拒，node <file> 可跑", ref: "test/serve.test.mjs" },
+    { id: "a20", at: "2026-09-29", taskId: "V-04", title: "V-04 沙箱策略透传已验证", tone: "success", detail: "dsh-pwsh-sandbox 的 resolve() 认 request.sandboxPolicy；同机实测不同会话解析出不同 mode；补 read-only 桩测试", ref: "test/serve.test.mjs" },
+    { id: "a21", at: "2026-09-29", taskId: "V-05", title: "V-05 现状取证", tone: "info", detail: "无 session 时走部署默认 → workspace-write 静默执行，既不拒绝也无提示", ref: "index.js:432" },
+    { id: "a22", at: "2026-09-29", taskId: "V-04", title: "V-04 验收通过（live read-only）", tone: "success", detail: "切 preset 后 sandbox.mode=read-only、denied=false；顺带查清 read-only 下 node --test 因 spawn 管道被拒，node <file> 可跑", ref: "test/serve.test.mjs" },
     { id: "a23", at: "2026-09-29", title: "摘要自检抓到自己造的漂移", tone: "warning", detail: "V-04 完成后 nextAction 仍指它；brief 只查了 taskId 存在性，补上「指向已关闭行」的报警", ref: "host/brief.js" },
-    { id: "a24", at: "2026-09-29", title: "V-05 裁决：显式回落", tone: "success", detail: "runCommand 结果新增 policy{source,sessionId,reason}；仍按部署默认执行但面板会括注；三条用例 + INTERFACE §4.1", ref: "INTERFACE.md §4.1" },
+    { id: "a24", at: "2026-09-29", taskId: "V-05", title: "V-05 裁决：显式回落", tone: "success", detail: "runCommand 结果新增 policy{source,sessionId,reason}；仍按部署默认执行但面板会括注；三条用例 + INTERFACE §4.1", ref: "INTERFACE.md §4.1" },
     { id: "a25", at: "2026-09-29", title: "canvas_new 把文件建到应用 cwd", tone: "danger", detail: "exec 里没有 agent 时 root 退到 process.cwd（Desktop = profile 目录）；改为多认几种 exec 形状 + 记住上次会话根", ref: "index.js toolRoot" },
-    { id: "a26", at: "2026-09-29", title: "重启后两处改动验证通过", tone: "success", detail: "相对路径落到工作区；gate:templates 新命令精确匹配成功、旧命令 denied；无 session 的 policy 括注也实测到了", ref: "R-03" },
-    { id: "a27", at: "2026-09-29", title: "preview 命名不再互相覆盖", tone: "success", detail: "改成按仓库相对路径派生；同名画布实测产出不同文件与不同内容；顺带补齐本仓看板缺失的锚点自检、并支持 nextAction=null", ref: "docs/preview/render.mjs" },
+    { id: "a26", at: "2026-09-29", taskId: "R-03", title: "重启后两处改动验证通过", tone: "success", detail: "相对路径落到工作区；gate:templates 新命令精确匹配成功、旧命令 denied；无 session 的 policy 括注也实测到了", ref: "R-03" },
+    { id: "a27", at: "2026-09-29", taskId: "D-03", title: "preview 命名不再互相覆盖", tone: "success", detail: "改成按仓库相对路径派生；同名画布实测产出不同文件与不同内容；顺带补齐本仓看板缺失的锚点自检、并支持 nextAction=null", ref: "docs/preview/render.mjs" },
   ],
 } as const;
 
@@ -350,6 +350,22 @@ export default function TaskBoard() {
     return dependency === undefined || dependency.status !== "completed";
   }));
   if (premature.length > 0) risks.push(premature.length + " 条在依赖未完成时已开工：" + premature.map((task) => task.id).join("、"));
+
+  // 迭代热力：不手抄"改了几次"，而是从活动日志里数出来 —— 每条活动带 taskId，
+  // 按"任务 × 日期"计数。没有 taskId 的历史条目数不进来（标题文本匹配是猜的）。
+  const heatColumns = useMemo(
+    () => Array.from(new Set((DATA.activity as readonly { at: string }[]).map((event) => event.at))).sort() as unknown as string[],
+    [],
+  );
+  const heatRows = useMemo(
+    () => tasks.map((task) => ({
+      id: task.id,
+      status: task.status,
+      values: (heatColumns as unknown as string[]).map((at) => (DATA.activity as readonly { at: string; taskId?: string }[])
+        .filter((event) => event.at === at && event.taskId === task.id).length),
+    })),
+    [tasks, heatColumns],
+  );
 
   const nextUp = open
     .slice()
@@ -602,6 +618,10 @@ export default function TaskBoard() {
           ])}
           emptyText="没有登记决策"
         />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="迭代热力" count={heatColumns.length} defaultOpen trailing={<Text size="caption" tone="tertiary">深浅 = 当天记录了几次该任务的活动</Text>}>
+        <HeatMatrix columns={heatColumns} rows={heatRows} unit="次" />
       </CollapsibleSection>
 
       <CollapsibleSection

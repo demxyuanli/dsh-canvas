@@ -98,7 +98,7 @@ Desktop 应用的 cwd 是 profile 目录 —— 信任它就是「文件被建�
 
 ## 5. 套件（`dsh/canvas`）导出面
 
-组件：`Stack Row Grid Divider CollapsibleSection H1 H2 Text Code Card CardHeader CardBody Callout Stat Table BarChart TodoList Progress KeyValue Timeline Button Pill`
+组件：`Stack Row Grid Divider CollapsibleSection H1 H2 Text Code Card CardHeader CardBody Callout Stat Table BarChart HeatMatrix TodoList Progress KeyValue Timeline Button Pill`
 钩子：`useState useEffect useMemo useCallback useRef useCanvasState useCanvasOverlay useCanvasAction useHostTheme useCanvasResource`
 
 `TodoList` 的 `status` 取 `pending | in_progress | blocked | completed | cancelled`。

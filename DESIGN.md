@@ -495,6 +495,9 @@ ctx.slots.register({ name: "sidebar.right.pane.tab", key: "@local/dsh-client-ui-
 **`BarChart`** — `{ categories: string[]; series: { name: string; data: number[]; tone?: Tone }[]; beginAtZero?: boolean; height?: number = 240; stacked?: boolean }`
 手写 SVG，不引第三方。P1 只做分组柱状图；线图/迷你趋势图放 P3（同为加性扩展）。
 
+**`HeatMatrix`** — `{ columns: string[]; rows: { id: string; label?: string; status?: Status; values: number[] }[]; layout?: "matrix" | "grid" = "matrix"; unit?: string = "次"; maxColumns?: number = 16; maxRows?: number = 24; showSummary?: boolean = true }`
+深浅 = 该格（或该行累计）的计数，**单色相只变透明度**（`color-mix`），不引入新色板 —— per-row tone 会把同一件事编码两次，所以行状态只用行头/下沿的颜色，不用格子底色。一个组件两种 layout：`matrix` 行 = 条目、列 = 轮次（保留时间维度，行头带状态、行末合计）；`grid` 把每行折成一格、格子铺开（**面积 = 条目数**，单格没地方放状态，所以状态走格子下沿）。超出封顶显式提示"showing X of Y"，与 `BarChart` 的 40 列、`Table` 的 `maxRows` 同一纪律。
+
 **`TodoList`** — `{ todos: { id: string; status: Status; content: ReactNode }[]; onTodoClick?: (todo) => void; dense?: boolean }`
 `Status = "pending" | "in_progress" | "completed" | "cancelled"`（与 DSH 的 `todo_write` 状态集对齐，便于互操作）。行前是状态点/勾，`onTodoClick` 让整行可点。
 
