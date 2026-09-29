@@ -10,7 +10,6 @@ import {
   Code,
   Stack,
   Row,
-  Grid,
   Divider,
   Card,
   CardBody,
@@ -117,12 +116,12 @@ export default function GateDashboard() {
         </Text>
       </Stack>
 
-      <Grid columns={4} gap={16}>
+      <Stack gap={16}>
         <Stat value={gates.length} label="gates" />
         <Stat value={gates.filter((g) => g.status === "pass").length} label="pass" tone="success" />
         <Stat value={failing.length} label="fail" tone={failing.length > 0 ? "danger" : "neutral"} />
         <Stat value={gates.filter((g) => g.status === "acked").length} label="acked" tone="neutral" />
-      </Grid>
+      </Stack>
 
       {failing.length > 0 ? (
         <Callout tone="danger" title={String(failing.length) + " 条门禁未通过"}>
@@ -176,7 +175,7 @@ export default function GateDashboard() {
         rowTone={visible.map((g) => TONE[g.status])}
       />
 
-      <Grid columns="minmax(0, 1.2fr) minmax(0, 0.8fr)" gap={20} align="start">
+      <Stack gap={20}>
         <Card>
           <CardHeader trailing={<Pill size="sm" tone="neutral">人工确认</Pill>}>
             接受一条红门禁
@@ -224,7 +223,7 @@ export default function GateDashboard() {
             </Text>
           </Stack>
         </CollapsibleSection>
-      </Grid>
+      </Stack>
 
       <H2>口径</H2>
       <Text size="small" tone="tertiary">

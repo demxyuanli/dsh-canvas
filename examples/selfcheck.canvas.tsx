@@ -4,7 +4,7 @@
  * icon: board
  */
 import {
-  H1, H2, Text, Code, Stack, Row, Grid, Divider, Card, CardBody, CardHeader,
+  H1, H2, Text, Code, Stack, Row, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, BarChart, TodoList, Pill, Button, CollapsibleSection,
   Progress, KeyValue, Timeline,
   useCanvasState, useCanvasOverlay, useCanvasAction, useMemo,
@@ -86,11 +86,11 @@ export default function SelfCheck() {
         the buttons below hand work back to the agent.
       </Text>
 
-      <Grid columns={3} gap={12}>
+      <Stack gap={12}>
         <Stat value={String(done) + "/" + String(rows.length)} label="Stages verified" tone="success" />
         <Stat value="94" label="Host assertions" tone="info" />
         <Stat value="0" label="Browser assertions" tone="warning" hint="no browser control in this session" />
-      </Grid>
+      </Stack>
 
       <Callout tone="warning" title="What is NOT verified yet">
         The client bundle is only served after the GUI restarts, because the running page
@@ -111,7 +111,7 @@ export default function SelfCheck() {
         <Pill onClick={() => overlay.set("c1", { status: "pending" })}>Reset c1</Pill>
       </Row>
 
-      <Grid columns="minmax(0, 1fr) minmax(0, 0.85fr)" gap={16} align="start">
+      <Stack gap={16}>
         <Stack gap={10}>
           <H2>Checks</H2>
           <TodoList
@@ -166,7 +166,7 @@ export default function SelfCheck() {
             </CardBody>
           </Card>
         ) : null}
-      </Grid>
+      </Stack>
 
       <H2>Detail</H2>
       <Table

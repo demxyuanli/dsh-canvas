@@ -22,7 +22,7 @@
 
 ## 效果
 
-下面三张是**真实渲染**：用 `host/compile.js` 编译真实画布，交给 `lib/client.js` 的套件渲染成 HTML，再套 harness 的主题 token 截图——不是示意图，也不是手画的 mock。生成脚本：[docs/preview/render.mjs](docs/preview/render.mjs)（`THEME=dark node docs/preview/render.mjs board.canvas.tsx gates.canvas.tsx examples/selfcheck.canvas.tsx`；去掉 `THEME=dark` 即浅色）。
+下面三张是**真实渲染**：用 `host/compile.js` 编译真实画布，交给 `lib/client.js` 的套件渲染成 HTML，再套 harness 的主题 token 截图——不是示意图，也不是手画的 mock。生成脚本：[docs/preview/render.mjs](docs/preview/render.mjs)（`PREVIEW_WIDTH=560 THEME=dark node docs/preview/render.mjs board.canvas.tsx gates.canvas.tsx examples/selfcheck.canvas.tsx`；去掉 `THEME=dark` 即浅色）。
 
 **项目看板**（[board.canvas.tsx](board.canvas.tsx)）：概览指标、派生风险、按 lane 分组的待办、富字段详情、下一步、明细表与活动时间线——每个数字都从 `export const DATA` 现算，没有手抄结论。
 
@@ -32,11 +32,11 @@
 
 ![门禁看板 · 深色](docs/preview/gates-dark.png)
 
-**套件全貌**（[selfcheck.canvas.tsx](examples/selfcheck.canvas.tsx)）：`Stack / Grid / Stat / Progress / BarChart / Table / Timeline / TodoList / CollapsibleSection / Button / Pill` 与全部钩子在同一张画布上。
+**套件全貌**（[selfcheck.canvas.tsx](examples/selfcheck.canvas.tsx)）：`Stack / Row / Stat / Progress / BarChart / Table / Timeline / TodoList / CollapsibleSection / Button / Pill` 与全部钩子在同一张画布上（画布一律单列纵向）。
 
 ![套件全貌 · 深色](docs/preview/selfcheck-dark.png)
 
-> 截图宽度 720px、2x 缩放（右栏可拉宽，也有全屏模式）；主题为 harness **深色**。light / dark 两套 token 在同一条主题表里，靠 `body[data-ds-dark-theme]` 切换 —— 脚本用 `THEME=dark` 生成深色，去掉即浅色。
+> 截图宽度 560px、2x 缩放（贴近右栏实际宽度），画布**单列纵向**排列，所以图比较长。主题为 harness **深色**：light / dark 两套 token 在同一条主题表里，靠 `body[data-ds-dark-theme]` 切换 —— 脚本用 `THEME=dark` 生成深色，去掉即浅色。
 
 <details>
 <summary>浅色主题变体（同样三张）</summary>

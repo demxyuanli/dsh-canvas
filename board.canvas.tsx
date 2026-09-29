@@ -4,7 +4,7 @@
  * icon: board
  */
 import {
-  H1, H2, Text, Code, Stack, Row, Grid, Divider, Card, CardBody, CardHeader,
+  H1, H2, Text, Code, Stack, Row, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, TodoList, Pill, Button, Progress, KeyValue, Timeline,
   CollapsibleSection, useMemo, useCanvasState, useCanvasOverlay, useCanvasAction,
 } from "dsh/canvas";
@@ -29,7 +29,7 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-28",
-  revision: "r17",
+  revision: "r18",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -194,6 +194,7 @@ export const DATA = {
     { id: "a13", at: "2026-09-28", title: "action 信封两端对齐 + host 兼容扁平形状", tone: "success", detail: "四条 host 动作恢复；接缝补上双向断言", ref: "DESIGN.md §28" },
     { id: "a14", at: "2026-09-28", title: "runCommand 在真实 ctx.shell 上 exit=0", tone: "success", detail: "profile 登记 gate:tests / gate:templates；新建 gates.canvas.tsx", ref: "cordis.patch.yml" },
     { id: "a15", at: "2026-09-28", title: "意图入口不再被任务提交触发", tone: "success", detail: "按 source.rpcId 的 canvas-* 前缀过滤", ref: "host/intent.js" },
+    { id: "a16", at: "2026-09-28", title: "画布改为单列纵向排列", tone: "success", detail: "模板 / 本仓画布 / patterns 与 kit 约定同步；不再左右分栏", ref: "skills/canvas/references/patterns.md" }
   ],
 } as const;
 
@@ -326,7 +327,7 @@ export default function TaskBoard() {
         />
       </Stack>
 
-      <Grid columns={4} gap={12}>
+      <Stack gap={12}>
         <Stat value={tasks.length} label="跟踪中" hint={"在办 " + open.length + " · 关闭 " + closed.length} />
         <Stat value={wip.length + "/" + DATA.wipLimit} label="在办 / WIP 上限" tone={wip.length > DATA.wipLimit ? "danger" : "info"} />
         <Stat
@@ -336,7 +337,7 @@ export default function TaskBoard() {
           hint={blocked.length > 0 ? blocked.map((task) => task.id).join("、") : "无"}
         />
         <Stat value={progressPct + "%"} label="加权进度" tone={progressPct >= 70 ? "success" : "warning"} hint={Math.round(weighted / 100) + " / " + estTotal + " 人日"} />
-      </Grid>
+      </Stack>
 
       {risks.length === 0 ? (
         <Callout tone="success" title="没有需要立即处理的风险">
@@ -361,7 +362,7 @@ export default function TaskBoard() {
         ))}
       </Row>
 
-      <Grid columns="minmax(0, 1.05fr) minmax(0, 0.95fr)" gap={20} align="start">
+      <Stack gap={20}>
         <Stack gap={12}>
           <H2>待办</H2>
           {DATA.lanes.map((lane) => {
@@ -452,10 +453,10 @@ export default function TaskBoard() {
             </CardBody>
           </Card>
         ) : null}
-      </Grid>
+      </Stack>
 
       <H2>下一步</H2>
-      <Grid columns={3} gap={12}>
+      <Stack gap={12}>
         {nextUp.map((task) => (
           <Card key={task.id}>
             <CardHeader trailing={<Pill size="sm" tone={PRIORITY_TONE[task.priority]}>{task.priority}</Pill>}>
@@ -474,7 +475,7 @@ export default function TaskBoard() {
             </CardBody>
           </Card>
         ))}
-      </Grid>
+      </Stack>
 
       <H2>明细</H2>
       <Table

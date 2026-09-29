@@ -4,7 +4,7 @@
  * icon: board
  */
 import {
-  H1, H2, Text, Code, Stack, Row, Grid, Divider, Card, CardBody, CardHeader,
+  H1, H2, Text, Code, Stack, Row, Divider, Card, CardBody, CardHeader,
   Callout, Stat, Table, TodoList, Pill, Button, Progress, KeyValue, Timeline,
   CollapsibleSection, useMemo, useCanvasState, useCanvasOverlay, useCanvasAction,
 } from "dsh/canvas";
@@ -239,7 +239,7 @@ export default function TaskBoard() {
         />
       </Stack>
 
-      <Grid columns={4} gap={12}>
+      <Stack gap={12}>
         <Stat value={tasks.length} label="跟踪中" hint={"在办 " + open.length + " · 关闭 " + closed.length} />
         <Stat value={wip.length + "/" + DATA.wipLimit} label="在办 / WIP 上限" tone={wip.length > DATA.wipLimit ? "danger" : "info"} />
         <Stat
@@ -249,7 +249,7 @@ export default function TaskBoard() {
           hint={blocked.length > 0 ? blocked.map((task) => task.id).join("、") : "无"}
         />
         <Stat value={progressPct + "%"} label="加权进度" tone={progressPct >= 70 ? "success" : "warning"} hint={Math.round(weighted / 100) + " / " + estTotal + " 人日"} />
-      </Grid>
+      </Stack>
 
       {risks.length === 0 ? (
         <Callout tone="success" title="没有需要立即处理的风险">
@@ -274,7 +274,7 @@ export default function TaskBoard() {
         ))}
       </Row>
 
-      <Grid columns="minmax(0, 1.05fr) minmax(0, 0.95fr)" gap={20} align="start">
+      <Stack gap={20}>
         <Stack gap={12}>
           <H2>待办</H2>
           {DATA.lanes.map((lane) => {
@@ -365,10 +365,10 @@ export default function TaskBoard() {
             </CardBody>
           </Card>
         ) : null}
-      </Grid>
+      </Stack>
 
       <H2>下一步</H2>
-      <Grid columns={3} gap={12}>
+      <Stack gap={12}>
         {nextUp.map((task) => (
           <Card key={task.id}>
             <CardHeader trailing={<Pill size="sm" tone={PRIORITY_TONE[task.priority]}>{task.priority}</Pill>}>
@@ -387,7 +387,7 @@ export default function TaskBoard() {
             </CardBody>
           </Card>
         ))}
-      </Grid>
+      </Stack>
 
       <H2>明细</H2>
       <Table

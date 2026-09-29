@@ -11,6 +11,8 @@
 
 四类共用的骨架顺序都是：**标题 → Stat 概览 → 约束/风险 Callout → 筛选 → 主体 → 明细**。顺序不要乱：人第一眼要看到"总量与红点"，最后才看细节。
 
+**一律单列。** 画布活在右栏：宽度可变、默认偏窄，还有全屏模式——左右分栏在窄宽度下必然挤碎（标签折行、表格列被挤成竖排）。所有区块从上到下排；只有 Pill / Button / 徽标这类小控件允许放进 `Row`（并且要 `wrap`）。`Grid` 保留给确实需要并排的场景，**范式里不再使用它**。
+
 ---
 
 ## 1. 看板 board
@@ -22,14 +24,14 @@
 ~~~text
 H1 + Text(目标) + Text(快照日 / 修订 / WIP 上限)
 Progress              -> 加权进度（按估算人日，不是条目计数）
-Grid columns=4        -> Stat 总数(带在办/关闭) / 在办-WIP / 阻塞 / 加权进度
+Stack                 -> Stat 总数(带在办/关闭) → 在办-WIP → 阻塞 → 加权进度（逐个纵向）
 Callout               -> 从数据派生的风险清单（阻塞 / 超期未更新 / WIP 超限 / 超估算）
 Row wrap              -> Pill 筛选（在办 / 阻塞 / 已关闭 / 全部 / 按分组）
-Grid 1.05fr : 0.95fr
-  左: CollapsibleSection(每组, trailing=在办数·完成%) -> Progress(该组) + TodoList
-      末尾: CollapsibleSection(已关闭) -> TodoList(dense)
-  右: Card 详情 -> Progress + KeyValue(字段) + 动作按钮
-Grid columns=3        -> "下一步"：按优先级取前 3 条，各带一个开始按钮
+Stack                 -> 主体：待办在前，详情在后
+  CollapsibleSection(每组, trailing=在办数·完成%) -> Progress(该组) + TodoList
+  CollapsibleSection(已关闭) -> TodoList(dense)
+  Card 详情 -> Progress + KeyValue(字段) + 动作按钮
+Stack                 -> "下一步"：按优先级取前 3 条，各带一个开始按钮
 Table                 -> 明细：ID / 优先 / 分组 / 标题 / 状态 / 负责人 / 进度 / 更新
 CollapsibleSection    -> 活动时间线（Timeline）+ 维护说明
 ~~~
@@ -121,7 +123,7 @@ const active = merged.find((t) => t.id === activeId) ?? open[0];
 
 ~~~text
 H1 + Text(基线是什么、怎么复现)
-Grid columns=3        -> Stat 通过 / 失败 / 未跑
+Stack                 -> Stat 通过 → 失败 → 未跑（逐个纵向）
 Callout danger        -> 失败清单（有失败时才渲染）
 Table                 -> Gate | 基线 | 最近 | Δ | 状态 | 操作(每行一个 Run 按钮)
 Row                   -> Run all 按钮 + 最近一次运行时间
@@ -187,7 +189,7 @@ v1 没有专用时间线组件——用 `Table` + 分组实现，效果一样且
 
 ~~~text
 H1 + Text(时间范围)
-Grid columns=3        -> Stat 本轮 / 累计 / 停滞天数
+Stack                 -> Stat 本轮 → 累计 → 停滞天数（逐个纵向）
 BarChart (可选)        -> 每天/每轮的事件计数
 CollapsibleSection(每天/每轮, defaultOpen=最近一个)
    Table              -> 时间 | 事件 | 状态 | 证据

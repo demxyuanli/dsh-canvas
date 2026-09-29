@@ -8,7 +8,6 @@ import {
   Text,
   Code,
   Stack,
-  Grid,
   Stat,
   Callout,
   CollapsibleSection,
@@ -36,11 +35,11 @@ export default function BlankCanvas() {
         <Text tone="secondary">{DATA.note}</Text>
       </Stack>
 
-      <Grid columns={3} gap={16}>
+      <Stack gap={16}>
         <Stat value={total} label="items" />
         <Stat value={done} label="completed" tone="success" />
         <Stat value={total - done} label="open" tone="warning" />
-      </Grid>
+      </Stack>
 
       <Callout tone="info" title="下一步">
         <Stack gap={4}>

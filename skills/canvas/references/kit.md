@@ -112,6 +112,8 @@ type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
 | `gap` | `number` | `16` | 间距 |
 | `align` | 同 `Stack` | — | 交叉轴对齐 |
 
+> **画布默认单列。** 右栏宽度可变、默认偏窄（还有全屏模式），左右分栏在窄宽度下会把标签和表格列挤碎。看板 / 门禁 / 时间线三类范式全部纵向排列；`Grid` 只留给确实需要并排的场景，不要用它把「待办 + 详情」这类主从内容并起来。
+
 ~~~tsx
 {/* 概览指标：三列等宽 */}
 <Grid columns={3} gap={16}>
