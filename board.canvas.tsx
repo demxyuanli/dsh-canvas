@@ -29,7 +29,7 @@ type Task = {
 export const DATA = {
   goal: "把 @local/dsh-canvas 推到可发布：真实环境验收 + 剩余缺口收口",
   asOf: "2026-09-29",
-  revision: "r26",
+  revision: "r27",
   wipLimit: 2,
   staleDays: 7,
   lanes: ["verify", "host", "docs", "release"],
@@ -50,7 +50,7 @@ export const DATA = {
     { id: "D5", at: "2026-09-28", chose: "startTurn 用 mode=queue + AbortSignal", rejected: ["mode=steer", "省略 signal"], why: "契约必填 signal；队列语义不抢占当前轮", ref: "DESIGN.md §27" },
   ],
   // 全局唯一的下一个动作。每任务的 next 是局部视角，两者不互相替代。
-  nextAction: { taskId: "R-03", action: "重启 Desktop 后验证两处：gates 画布 Run 走新命令（exit=0）、canvas_new 传相对路径落在工作区", why: "这是唯一还开着的验证项，且两处改动都要重启才生效" },
+  nextAction: { taskId: "D-01", action: "让 docs/preview/render.mjs 按相对路径命名输出，两个同名画布不再互相覆盖", why: "本次踩到的真实缺陷（已重生成过一次图），是唯一还开着的条目" },
   tasks: [
     {
       id: "V-01", lane: "verify", title: "重启后目视三张画布",
@@ -198,14 +198,25 @@ export const DATA = {
     },
     {
       id: "R-03", lane: "release", title: "重启后验证：门禁新命令 + 工具 root",
-      status: "pending", priority: "P2", owner: "-",
+      status: "completed", priority: "P2", owner: "agent",
+      progress: 100, estimate: 1, actual: 1,
+      startedAt: "2026-09-29", updatedAt: "2026-09-29", completedAt: "2026-09-29", blocker: "",
+      goal: "read-only 会话里 templates 门禁能给出真实退出码；canvas 工具的相对路径落在工作区而不是应用 cwd",
+      next: "",
+      acceptance: "① exit=0 且生效命令为 node test/templates.test.mjs；② canvas_new 返回的路径在工作区内",
+      evidence: "重启后实测：相对路径 canvas_check 通过、canvas_new 落在工作区；gate:templates exit=0 且新命令精确匹配成功、旧命令 denied", write: "profiles/*/cordis.patch.yml + index.js",
+      ref: "troubleshooting.md", note: "用白名单的 command 精确匹配判定生效命令：新命令 ok、旧命令『not in commandWhitelist』",
+    },
+    {
+      id: "D-01", lane: "docs", title: "preview 脚本按 basename 命名会互相覆盖",
+      status: "pending", priority: "P3", owner: "-",
       progress: 0, estimate: 1, actual: 0,
       startedAt: "", updatedAt: "2026-09-29", completedAt: "", blocker: "",
-      goal: "read-only 会话里 templates 门禁能给出真实退出码；canvas 工具的相对路径落在工作区而不是应用 cwd",
-      next: "重启 Desktop：① gates 画布点 Run，确认 exit=0 且 detail 无 deployment 括注；② 用 canvas_new 传相对路径建画布，确认落在工作区",
-      acceptance: "① exit=0 且生效命令为 node test/templates.test.mjs；② canvas_new 返回的路径在工作区内",
-      evidence: "profile patch + index.js root 解析已改（都待重启生效）", write: "profiles/*/cordis.patch.yml + index.js",
-      ref: "troubleshooting.md", note: "运行中的 host 仍是旧代码与旧命令；desktop 与 web 两份 profile 都已改",
+      goal: "两张同名画布各生成各的图，不互相覆盖",
+      next: "把 render.mjs 的输出名由 basename 改成相对路径派生（如 canvases-board），并重生成 6 张图",
+      acceptance: "分别生成不同目录下的同名画布，产物路径不同且内容各自正确",
+      evidence: "本次 canvases/board.canvas.tsx 覆盖了 board.html", write: "docs/preview/render.mjs",
+      ref: "docs/preview/render.mjs", note: "只影响 docs 工具，不影响插件运行时",
     },
   ],
   activity: [
@@ -234,6 +245,7 @@ export const DATA = {
     { id: "a23", at: "2026-09-29", title: "摘要自检抓到自己造的漂移", tone: "warning", detail: "V-04 完成后 nextAction 仍指它；brief 只查了 taskId 存在性，补上「指向已关闭行」的报警", ref: "host/brief.js" },
     { id: "a24", at: "2026-09-29", title: "V-05 裁决：显式回落", tone: "success", detail: "runCommand 结果新增 policy{source,sessionId,reason}；仍按部署默认执行但面板会括注；三条用例 + INTERFACE §4.1", ref: "INTERFACE.md §4.1" },
     { id: "a25", at: "2026-09-29", title: "canvas_new 把文件建到应用 cwd", tone: "danger", detail: "exec 里没有 agent 时 root 退到 process.cwd（Desktop = profile 目录）；改为多认几种 exec 形状 + 记住上次会话根", ref: "index.js toolRoot" },
+    { id: "a26", at: "2026-09-29", title: "重启后两处改动验证通过", tone: "success", detail: "相对路径落到工作区；gate:templates 新命令精确匹配成功、旧命令 denied；无 session 的 policy 括注也实测到了", ref: "R-03" },
   ],
 } as const;
 
