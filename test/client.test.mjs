@@ -77,6 +77,7 @@ t("HeatMatrix renders both layouts and a summary from one data shape", () => {
     if (Array.isArray(node)) { node.forEach((child) => collect(child, out)); return out; }
     if (typeof node === "string" || typeof node === "number") { out.text.push(String(node)); return out; }
     if (typeof node.type === "function") return collect(node.type(node.props), out);
+    out.types.push(typeof node.type === "string" ? node.type : (node.type && node.type.name) || "?");
     const props = node.props || {};
     if (props.style && typeof props.style.background === "string") out.shades.push(props.style.background);
     if (typeof props.title === "string") out.titles.push(props.title);
@@ -85,7 +86,7 @@ t("HeatMatrix renders both layouts and a summary from one data shape", () => {
     return out;
   };
   const read = (element) => {
-    const out = collect(element, { text: [], shades: [], titles: [] });
+    const out = collect(element, { text: [], shades: [], titles: [], types: [] });
     out.flat = out.text.join(" ");
     return out;
   };
@@ -103,6 +104,12 @@ t("HeatMatrix renders both layouts and a summary from one data shape", () => {
   assert.equal(grid.titles.filter((t) => t.startsWith("T-")).length, 2, "one cell per row in the grid layout");
 
   assert.ok(new Set(matrix.shades.concat(grid.shades)).size >= 3, "depth must vary: empty, light and deep are distinct");
+
+  // switchable is what turns a baked-in view into a reader choice; without it the
+  // component stays purely presentational (no toggle, no state).
+  assert.equal(matrix.types.filter((t) => t === "button").length, 0, "the declared layout must not grow a toggle");
+  const switchable = read(kit.HeatMatrix({ columns: ["R1", "R2"], rows: rows, switchable: true }));
+  assert.equal(switchable.types.filter((t) => t === "button").length, 2, "switchable renders one pill per view");
 });
 
 const seen = { types: [], slots: [] };

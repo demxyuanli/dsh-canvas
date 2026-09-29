@@ -105,7 +105,8 @@ const heatRows = tasks.map((task) => ({
 
 - **没有 `taskId` 的历史条目数不进来**，也不要用标题文本匹配兜底：那是猜的，而热力图的数字必须可复核；
 - 数据不是活动日志的画布（例如按轮次人工记录），直接显式写 `iterations: { columns, rows }`；
-- 两种 layout：`matrix` 看"哪一轮动的、谁最反复"，`grid` 看"整体规模 + 分布"（**面积 = 条目数**）。
+- 两种 layout：`matrix` 看"哪一轮动的、谁最反复"，`grid` 看"整体规模 + 分布"（**面积 = 条目数**）；
+- 想让**读者**自己切就加 `switchable`：`<HeatMatrix switchable … />` —— 视图存本机、agent 看不到（那是 UI 态，不是数据）。要自定义文案/位置，就在画布里用 `useCanvasState` 接自己的 `Pill` 行。
 
 
 **关键片段：筛选 + 选中 + 人的状态改动**

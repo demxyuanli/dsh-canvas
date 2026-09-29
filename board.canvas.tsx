@@ -622,7 +622,7 @@ export default function TaskBoard() {
       </CollapsibleSection>
 
       <CollapsibleSection title="迭代热力" count={heatColumns.length} defaultOpen trailing={<Text size="caption" tone="tertiary">深浅 = 当天记录了几次该任务的活动</Text>}>
-        <HeatMatrix columns={heatColumns} rows={heatRows} unit="次" />
+        <HeatMatrix columns={heatColumns} rows={heatRows} unit="次" switchable />
       </CollapsibleSection>
 
       <CollapsibleSection

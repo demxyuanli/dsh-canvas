@@ -359,6 +359,7 @@ type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
 | `layout` | `"matrix" \| "grid"` | `"matrix"` | `matrix`：行 = 条目、列 = 轮次；`grid`：一格一条目、深浅 = 行累计 |
 | `unit` | `string` | `"次"` | 图例与汇总里的单位 |
 | `maxColumns` / `maxRows` | `number` | `16` / `24` | 封顶；超出会显式写"showing X of Y" |
+| `switchable` | `boolean` | `false` | 在组件里放一个「矩阵 / 格子」开关，让**读者**自己切；选择存本机（`useCanvasState`），agent 看不到 |
 | `showSummary` | `boolean` | `true` | 底部汇总（条目数 · 完成数 · 总数 · 最深一格） |
 
 ~~~tsx
@@ -370,6 +371,8 @@ type Status = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
 ~~~
 
 > 数据从哪来？优先**从已有记录派生**（例如活动日志里每条带 `taskId`，按"任务 × 日期"数一数），再允许显式写 `iterations`。见 [patterns.md](patterns.md) 的「迭代热力」。
+>
+> 带 `switchable` 时，视图是**读者的**选择（存本机、agent 不可见），`layout` 只作为初值；不带时组件是纯展示的，视图由画布代码定死。要自定义开关文案/位置，就在画布里自己用 `useCanvasState` 接一行 `Pill`。
 
 ### `TodoList`
 
